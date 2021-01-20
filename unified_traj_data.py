@@ -7,10 +7,9 @@ Created on Fri July  20 14:17:57 2018
 """
 
 import utils
-import met_utils
-import lagrangian_case as lc
+from . import met_utils
+from . import lagrangian_case as lc
 from CSET_LES import utils as les_utils
-
 import datetime as dt
 import numpy as np
 import os
@@ -117,20 +116,16 @@ def add_ERA_ens_to_trajectory(ds, box_degrees=2):
                 gauss_shape = tuple([v for v,i in zip(z.shape,z.dims) if i in ['latitude', 'longitude'] ])
                 gauss = utils.gauss2D(shape=gauss_shape, sigma=gauss_shape[-1])
                 filtered = z * gauss
-#                 filtered2 = z.values * gauss
                 vals.append(filtered.sum(dim=('latitude', 'longitude')).values)
             ds['ERA_ens_'+var] = (tuple(x for x in data[var].dims if x not in ['latitude', 'longitude']), np.array(vals), data[var].attrs)
-#     return ds
-
-
 
     print('adding ensemble temperatures...')
     ens_temp_files = [os.path.join(utils.ERA_ens_temp_source, i) for i in sorted(os.listdir(utils.ERA_ens_temp_source))]
     
     with xr.open_mfdataset(sorted(ens_temp_files), combine='by_coords') as data:
         data = data.rename({'level': 'ens_level'})
-#         ds.coords['number'] = data.coords['number']
-#         ds.coords['ens_level'] = data.coords['ens_level']
+        #ds.coords['number'] = data.coords['number']
+        #ds.coords['ens_level'] = data.coords['ens_level']
         
         for var in data.data_vars.keys():
             var_shape = data[var].isel(time=0, latitude=0, longitude=0).shape
@@ -151,11 +146,11 @@ def add_ERA_ens_to_trajectory(ds, box_degrees=2):
                 gauss_shape = tuple([v for v,i in zip(z.shape,z.dims) if i in ['latitude', 'longitude'] ])
                 gauss = utils.gauss2D(shape=gauss_shape, sigma=gauss_shape[-1])
                 filtered = z * gauss
-#                 filtered2 = z.values * gauss
                 vals.append(filtered.sum(dim=('latitude', 'longitude')).values)
             ds['ERA_ens_'+var] = (tuple(x for x in data[var].dims if x not in ['latitude', 'longitude']), np.array(vals), data[var].attrs)
     return ds
-    
+
+
 def add_ERA_to_trajectory(ds, box_degrees=2):
     """Retrieve ERA5 data in a box around a trajectory
     Assumes ERA5 data is 0.3x0.3 degrees
@@ -249,8 +244,7 @@ def add_ERA_to_trajectory(ds, box_degrees=2):
                 vals.append(np.sum(filtered, axis=(1,2)))
             ds['ERA_'+var] = (('time', 'level'), np.array(vals))
             ds['ERA_'+var] = ds['ERA_'+var].assign_attrs(data[var].attrs)
-            
-            
+             
         t_1000 = ds.ERA_t.sel(level=1000).values
         theta_700 = met_utils.theta_from_p_T(p=700, T=ds.ERA_t.sel(level=700).values)
         LTS = theta_700-t_1000
@@ -272,8 +266,6 @@ def add_ERA_to_trajectory(ds, box_degrees=2):
         
         with xr.open_mfdataset(sorted(flux_files), combine='by_coords') as flux_data:
             for var in flux_data.data_vars.keys():
-#                 if var not in ['sshf', 'slhf']:
-#                     continue
                 vals = []
                 for (lat, lon, time) in zip(lats, lons%360, times):
                     if lat > np.max(flux_data.coords['latitude']) or lat < np.min(flux_data.coords['latitude']) or \
@@ -290,20 +282,15 @@ def add_ERA_to_trajectory(ds, box_degrees=2):
                 ds['ERA_'+var] = (('time'), np.array(vals))
                 ds['ERA_'+var] = ds['ERA_'+var].assign_attrs(flux_data[var].attrs)
 
-        
-        
-
     ds.attrs['ERA_params'] = f'ERA5 data acquired from ECWMF Copernicus at cds.climate.copernicus.eu/. statistics computed over a {box_degrees}-deg average centered on trajectory. EIS and LTS computed according to Wood and Bretherton (2006) and Klein and Hartmann (1993) respectively.'
     ds.attrs['ERA_reference'] = 'Copernicus Climate Change Service (C3S) (2017): ERA5: Fifth generation of ECMWF atmospheric reanalyses of the global climate . Copernicus Climate Change Service Climate Data Store (CDS), date of access. https://cds.climate.copernicus.eu/cdsapp#!/home'
-        
-            
+         
     return ds
     
+
 def add_MERRA_to_trajectory(ds, box_degrees=2):
     """Add MERRA-inferred aerosol number concentrations to trajectory.
-    """
-    
-        
+    """ 
     lats, lons, times = ds.lat.values, ds.lon.values, utils.as_datetime(ds.time.values)
     unique_days = set([utils.as_datetime(i).date() for i in times])
     files = [os.path.join("/home/disk/eos4/jkcm/Data/MERRA/3h/", "more_vertical", "MERRA2_400.inst3_3d_aer_Nv.{:%Y%m%d}.nc4.nc4".format(i))
@@ -345,7 +332,7 @@ def add_MERRA_to_trajectory(ds, box_degrees=2):
         merra_data.ND_McCoy2017.attrs = {'long_name': 'Nd from sulfate-only regression', 'units': 'cm**-3'}
         merra_data.ND_McCoy2018.attrs = {'long_name': 'Nd from multi-species regression', 'units': 'cm**-3'}
         
-        vals_to_add = ['ND_McCoy2017', 'ND_McCoy2018', 'Na_tot', 'MERRA_Na_tot_corr', 'H', 'PL', 'RH']
+        vals_to_add = ['ND_McCoy2017', 'ND_McCoy2018', 'Na_tot', 'MERRA_Na_tot_corr', 'H', 'PL', 'RH', 'AIRDENS']
         na_tot = np.zeros_like(merra_data.SS001.values)
         
         merra_data.coords['lon'] = merra_data['lon']%360
@@ -353,8 +340,6 @@ def add_MERRA_to_trajectory(ds, box_degrees=2):
         new_vals = []
         for varname,params in les_utils.merra_species_dict_colarco.items():
             vals_to_add.append(varname)
-
-#             print(f'working on {varname}...')
             var = merra_data[varname]
 
             num=les_utils.mass_to_number(mass=var, air_density=merra_data.AIRDENS.values, shape_params=params)
@@ -365,12 +350,14 @@ def add_MERRA_to_trajectory(ds, box_degrees=2):
         merra_data['Na_tot'] = (('time', 'lev', 'lat', 'lon'), na_tot, {'long_name': 'total aerosol number concentration, >100 um', 'units': 'cm**-3'})
 
         merra_data['MERRA_Na_tot_corr'] = (('time', 'lev', 'lat', 'lon'), np.exp(1.24*np.log(na_tot) + 0.18), {'long_name': 'total aerosol number concentration, >100 um, corrected to aircraft', 'units': 'cm**-3'})  
+        merra_data['MERRA_Na_tot_corr_FT'] = (('time', 'lev', 'lat', 'lon'), np.exp(0.81*np.log(na_tot) + 1.25), {'long_name': 'total aerosol number concentration, >100 um, corrected to aircraft (free-tropospheric obs only)', 'units': 'cm**-3'})  
+        merra_data['MERRA_Na_tot_corr_BL'] = (('time', 'lev', 'lat', 'lon'), np.exp(1.82*np.log(na_tot) - 1.28), {'long_name': 'total aerosol number concentration, >100 um, corrected to aircraft (boundary layer obs only)', 'units': 'cm**-3'})  
                    
                    
         ds = ds.assign_coords(lev = les_utils.MERRA_lev(merra_data.lev))
         
         merra_data = merra_data.assign_coords(lev = les_utils.MERRA_lev(merra_data.lev))
-#         merra_data = merra_data.rename_dims({'lev': 'pres'})
+        #merra_data = merra_data.rename_dims({'lev': 'pres'})
                 
         
         for var in vals_to_add+new_vals:
@@ -384,7 +371,7 @@ def add_MERRA_to_trajectory(ds, box_degrees=2):
                     print(merra_data.coords['lat'])
                     print(merra_data.coords['lon'])
                     raise ValueError()
-                    vals.append(np.full(var_shape, float('nan'), dtype='float'))
+                    #vals.append(np.full(var_shape, float('nan'), dtype='float'))
                     continue
                 x = merra_data[var].sel(lon=slice(lon - box_degrees/2, lon + box_degrees/2),
                                         lat=slice(lat - box_degrees/2, lat + box_degrees/2))
@@ -394,8 +381,8 @@ def add_MERRA_to_trajectory(ds, box_degrees=2):
                 gauss = utils.gauss2D(shape=gauss_shape, sigma=gauss_shape[-1])
                 filtered = z * gauss
                 vals.append(filtered.sum(dim=('lat', 'lon')).values)
-#             print(tuple(x for x in merra_data[var].dims if x not in ['lat', 'lon']))
-#             print(ds.coords)
+             #print(tuple(x for x in merra_data[var].dims if x not in ['lat', 'lon']))
+             #print(ds.coords)
             if var in vals_to_add:
                 attrs = merra_data[var].attrs
             elif var in new_vals:
@@ -408,9 +395,46 @@ def add_MERRA_to_trajectory(ds, box_degrees=2):
     ds.attrs['MERRA_params'] = f'MERRA-2 data primarily downloaded from NASA GMAO, and statistics computed over a {box_degrees}-deg average centered on trajectory. For aerosol estimates (Na), equivalent aerosol number is computed based on aerosol mass consistent with the MERRA2-assumed aerosol optical properties. Contact jkcm@uw.edu for details.'
     ds.attrs['MERRA_reference'] = 'MERRA-2 data available at https://gmao.gsfc.nasa.gov/reanalysis/MERRA-2. Nd estimates from McCoy et al. (2017) and McCoy et al. (2018): McCoy, D. T., Bender, F. A. ‐M., Mohrmann, J. K. C., Hartmann, D. L., Wood, R., & Grosvenor, D. P. (2017). The global aerosol‐cloud first indirect effect estimated using MODIS, MERRA, and AeroCom. Journal of Geophysical Research: Atmospheres, 122(3), 1779–1796. https://doi.org/10.1002/2016JD026141. McCoy, D. T., Bender, F. A. M., Grosvenor, D. P., Mohrmann, J., Hartmann, D. L., Wood, R., & Field, P. R. (2018). Predicting decadal trends in cloud droplet number concentration using reanalysis and satellite data. Atmospheric Chemistry and Physics, 18(3), 2035–2047. https://doi.org/10.5194/acp-18-2035-2018'
     
+    return ds
+
+
+def new_add_MERRA_to_trajectory(ds, box_degrees=2):
+    
+    ds['MERRA_Na_tot_mass'] = ds.MERRA_OCPHILIC + ds.MERRA_OCPHOBIC + ds.MERRA_BCPHILIC + ds.MERRA_BCPHOBIC + ds.MERRA_SO4 + ds.MERRA_DU001 + ds.MERRA_DU002 + ds.MERRA_DU003 +ds.MERRA_DU004 + \
+                       ds.MERRA_DU005 + ds.MERRA_SS001 + ds.MERRA_SS002 + ds.MERRA_SS003 + ds.MERRA_SS004 + ds.MERRA_SS005
+    
+    #akn=aitken = everything below 80nm
+    #acc = accumulution = everything between 80 and 1000
+    #crs=coarse = everything above 1000
+    
+    mass_acc_dict = {}
+    mass_aik_dict = {}
+    mass_crs_dict = {}
+    num_acc_dict = {}
+    num_aik_dict = {}
+    num_crs_dict = {}
+    
+    # for x in ['MERRA_OCPHILIC', 'MERRA_OCPHOBIC', 'MERRA_BCPHILIC', 'MERRA_BCPHOBIC', 'MERRA_SO4']:
+        
+    
+    # ds['MERRA_Na_acc_mass'] = 
+    # ds['MERRA_Na_akn_mass'] = 
+    # ds['MERRA_Na_crs_mass'] = 
+    
+    # ds['MERRA_akn_num'] = 
+    # ds['MERRA_acc_num'] = 
+    # ds['MERRA_crs_num'] = 
+    
+    
+    
     
     return ds
+
+    #aitken = low-100nm
+    #add aikten NUMBER
+    #add aikten mass
     
+
 def add_speeds_to_trajectories(ds):
     """Add speed variables to trajectory. used centered difference of distances traveled
     """
@@ -430,7 +454,7 @@ def add_speeds_to_trajectories(ds):
     #headings are average of end azimuth of previous segment/start azimuth of next geodesic segment,
     #except at start and end, where are just the start/end azimuths of the first/last geodesic
     speeds = np.mean(np.vstack([seg_speeds+[seg_speeds[-1]],[seg_speeds[0]]+seg_speeds]), axis=0)
-#     headings = np.mean(np.vstack([[heading_starts[0]]+heading_ends, heading_starts+[heading_ends[-1]]]), axis=0) THIS HAD A BUG
+     #headings = np.mean(np.vstack([[heading_starts[0]]+heading_ends, heading_starts+[heading_ends[-1]]]), axis=0) THIS HAD A BUG
     def radial_mean(h1, h2):
         diff = ((h2-h1)+180)%360-180
         return h1 + diff/2
@@ -478,6 +502,7 @@ def add_advection_to_trajectory(ds):
     ds['ERA_MR_adv'] = ds['ERA_MR_adv'].assign_attrs(**MR_adv_attr)
     return ds
 
+
 def add_upwind_profile_to_trajectory(ds, dist=200, box_avg=2):
     """Add 'upwind' profile (not a true profile since the location varies with height)
     for alternative nudging method.
@@ -512,31 +537,33 @@ def add_ERA_sfc_data(ds, box_degrees=2):
                     continue
                 x = data[var].sel(longitude=slice(lon - box_degrees/2, lon + box_degrees/2),
                                   latitude=slice(lat + box_degrees/2, lat - box_degrees/2))
-                z = x.sel(method='nearest', tolerance=np.timedelta64(minutes=59), time=time)
+                z = x.sel(method='nearest', tolerance=np.timedelta64(59, 'm'), time=time)
                 gauss = utils.gauss2D(shape=z.shape, sigma=z.shape[0])
                 filtered = z.values * gauss
                 vals.append(np.sum(filtered))
             ds['ERA_'+var] = (('time'), np.array(vals))
             ds['ERA_'+var] = ds['ERA_'+var].assign_attrs(data[var].attrs)
             
-#     lhf = ds['ERA_ie'].values*2264705
-#     ds['ERA_ilhf'] = (('time'), lhf)
-#     ds['ERA_ilhf'] = ds['ERA_ilhf'].assign_attrs({"long_name": "Instantaneous surface latent heat flux",
-#                                                   "units": "W m**-2",
-#                                                   "_FillValue": "NaN"})
-#     ds['ERA_'+var] = ds['ERA_'+var]
+    #lhf = ds['ERA_ie'].values*2264705
+    #ds['ERA_ilhf'] = (('time'), lhf)
+    #ds['ERA_ilhf'] = ds['ERA_ilhf'].assign_attrs({"long_name": "Instantaneous surface latent heat flux",
+    #                                              "units": "W m**-2",
+    #                                              "_FillValue": "NaN"})
+    #ds['ERA_'+var] = ds['ERA_'+var]
 
     return ds
+
 
 def add_GOES_obs(ds):
     #rfnum = ds['']
     return ds
 
+
 def add_MODISPBL_to_trajectory(ds, box_degrees=3):
     lats, lons, times = ds.lat.values, ds.lon.values, ds.time.values
     MODIS_day_idx = np.argwhere([i.hour == 23 for i in utils.as_datetime(times)]).squeeze()
     MODIS_night_idx = np.argwhere([i.hour == 11 for i in utils.as_datetime(times)]).squeeze()
-#     dayfile = '/home/disk/eos4/jkcm/Data/CSET/Ryan/Daily_1x1_JHISTO_CTH_c6_day_v2_calboxes_top10_Interp_hif_zb_2011-2016.nc'
+     #dayfile = '/home/disk/eos4/jkcm/Data/CSET/Ryan/Daily_1x1_JHISTO_CTH_c6_day_v2_calboxes_top10_Interp_hif_zb_2011-2016.nc'
     dayfile = '/home/disk/eos4/jkcm/Data/CSET/Ryan/Daily_1x1_JHISTO_CTH_c6_day_v2_calboxes_top10_Interp_hif_zb_2011-2016_corrected.nc'
     nightfile = '/home/disk/eos4/jkcm/Data/CSET/Ryan/Daily_1x1_JHISTO_CTH_c6_night_v2_calboxes_top10_Interp_hif_zb_2011-2016.nc'
     vals = []   
@@ -569,8 +596,9 @@ def add_MODISPBL_to_trajectory(ds, box_degrees=3):
     
     
     ds.attrs['MODIS_params'] = f'MODIS Aqua cloud-top height from Eastman et al. (2017) computed over a {box_degrees}-deg average centered on trajectory'
-    ds.attrs['SSMI_reference'] = f"Eastman, R., Wood, R., & O, K. T. (2017). The Subtropical Stratocumulus-Topped Planetary Boundary Layer: A Climatology and the Lagrangian Evolution. Journal of the Atmospheric Sciences, 74(8), 2633–2656. https://doi.org/10.1175/JAS-D-16-0336.1"
+    ds.attrs['MODIS_reference'] = f"Eastman, R., Wood, R., & O, K. T. (2017). The Subtropical Stratocumulus-Topped Planetary Boundary Layer: A Climatology and the Lagrangian Evolution. Journal of the Atmospheric Sciences, 74(8), 2633–2656. https://doi.org/10.1175/JAS-D-16-0336.1"
     return ds
+
 
 def add_SSMI_to_trajectory(ds, box_degrees=2):
     lats, lons, times = ds.lat.values, ds.lon.values, ds.time.values
@@ -602,7 +630,7 @@ def add_SSMI_to_trajectory(ds, box_degrees=2):
                     sampletime = ds_sub2.time.values + np.timedelta64(int(meantime), 'h') + np.timedelta64(int(60*(meantime - int(meantime))), 'm')
                     miss = (time-sampletime)/np.timedelta64(1, 'h')
                     if np.abs(miss)<0.5:
-#                         print(f'{sat}: found data at {time}, off by {miss} hours. sample fill is {nsample:.0%}')
+                         #print(f'{sat}: found data at {time}, off by {miss} hours. sample fill is {nsample:.0%}')
                         cloud_vals[i] = np.nanmean(ds_sub2.cloud)
                         vapor_vals[i] = np.nanmean(ds_sub2.vapor)
                         wspd_vals[i] = np.nanmean(ds_sub2.wspd_mf)
@@ -624,6 +652,7 @@ def add_SSMI_to_trajectory(ds, box_degrees=2):
 
     return ds
 
+
 def add_CERES_to_trajectory(ds, box_degrees=2):
     lats, lons, times = ds.lat.values, ds.lon.values, ds.time.values
 
@@ -635,10 +664,11 @@ def add_CERES_to_trajectory(ds, box_degrees=2):
     
     means_dict, stds_dict = dict(), dict()
     for i, (lat, lon, time) in enumerate(zip(lats, lons%360, times)):
-        ds_sub = ceres_file.sel(time=time, method='nearest', tolerance=np.timedelta64(1, 'h'))  
+        ds_sub = ceres_file.sel(time=time, method='nearest', tolerance=np.timedelta64(24, 'h'))
         ds_sub2 = ds_sub.sel(lon=slice(lon - box_degrees/2, lon + box_degrees/2),
                              lat=slice(lat - box_degrees/2, lat + box_degrees/2))
-        for var in  ['toa_sw_all_1h', 'toa_sw_clr_1h', 'toa_lw_all_1h', 'toa_lw_clr_1h', 'lw_cre', 'sw_cre', 'net_cre', 'toa_solar_all_1h', 'cldarea_low_1h' , 'cldtau_low_1h', 'lwp_low_1h', 'solar_zen_angle_1h', 
+        for var in  ['toa_sw_all_1h', 'toa_sw_clr_1h', 'toa_lw_all_1h', 'toa_lw_clr_1h', 'lw_cre', 'sw_cre', 'net_cre', 'toa_solar_all_1h', 'cldarea_low_1h' , 
+                     'cldtau_low_1h', 'lwp_low_1h', 'solar_zen_angle_1h', 'cldwatrad_low_1h',
                      'adj_atmos_sw_down_all_surface_1h', 'adj_atmos_sw_up_all_surface_1h', 'adj_atmos_lw_down_all_surface_1h', 'adj_atmos_lw_up_all_surface_1h']:
             
             means_dict.setdefault(var, []).append(np.nanmean(ds_sub2[var]))
@@ -656,25 +686,37 @@ def add_CERES_to_trajectory(ds, box_degrees=2):
     return ds
     
 
-def add_amsr_to_trajectory(ds, box_degrees=2):
-#     
+def add_amsr_to_trajectory(ds, box_degrees=2):     
+    lats, lons, times = ds.lat.values, ds.lon.values, ds.time.values
+
     try:
         precip_data = xr.open_mfdataset(np.unique([f'/home/disk/eos9/jkcm/Data/rain/{i.year}/AMSR2_89GHz_pcp_est_{i.year}_{i.dayofyear:03}_day_gridded.nc' 
                                                    for i in pd.DatetimeIndex(ds.time.values)]) , combine='by_coords')
         
-        
         means_dict, stds_dict = dict(), dict()
         for i, (lat, lon, time) in enumerate(zip(lats, lons%360, times)):
-            ds_sub = ceres_file.sel(time=time, method='nearest', tolerance=np.timedelta64(1, 'h'))  
-            ds_sub2 = ds_sub.sel(lon=slice(lon - box_degrees/2, lon + box_degrees/2),
-                                 lat=slice(lat - box_degrees/2, lat + box_degrees/2))
-        
-        
-    #     df['amsr_tb_rate'] = df.apply(lambda x: np.nanmean(slice_data(precip_data.rain_rate_mean, x['lat'], x['lon'], size=0.5)), axis=1)
-    #     df['amsr_tb_rwr'] = df.apply(lambda x: np.nanmean(slice_data(precip_data.rain_rwr_mean, x['lat'], x['lon'], size=0.5)), axis=1)
-    #     df['amsr_tb_prob'] = df.apply(lambda x: np.nanmean(slice_data(precip_data.rain_prob_mean, x['lat'], x['lon'], size=0.5)), axis=1)
+            ds_sub = precip_data.sel(date=time, method='nearest', tolerance=np.timedelta64(24, 'h'))  
+            ds_sub2 = ds_sub.sel(longitude=slice(lon - box_degrees/2, lon + box_degrees/2),
+                                 latitude=slice(lat - box_degrees/2, lat + box_degrees/2))
+            # print(ds_sub2.time)       
 
-    # except (FileNotFoundError, AttributeError) as e:
+            print((ds_sub2.time.values - time)/np.timedelta64(1, 'h'))
+
+        
+
+            for var in  ['rain_rate_mean', 'rain_rwr_mean', 'rain_prob_mean']:
+                    
+                    means_dict.setdefault(var, []).append(np.nanmean(ds_sub2[var]))
+                    stds_dict.setdefault(var, []).append(np.nanstd(ds_sub2[var]))
+
+            for var in means_dict.keys():
+                attrs = attr_dict.setdefault(var, ds_sub2[var].attrs)
+                ds['AMSR_TB_'+var] = (('time'), np.array(means_dict[var]), attrs)
+                attrs.update(long_name=attrs['long_name']+', standard deviation over box')
+                ds['AMSR_TB_'+var+'_std'] = (('time'), np.array(stds_dict[var]), attrs)
+
+    except (FileNotFoundError, AttributeError) as e:
+        raise e
     #     if isinstance(e, FileNotFoundError):
     #         print('could not find precip file for date, continuing:' + str(date))
     #         print(e)
@@ -692,7 +734,9 @@ def add_amsr_to_trajectory(ds, box_degrees=2):
     #     print(e)
     
     return ds
-    
+
+
+
 def make_trajectory(rfnum, trajnum, save=False, trajectory_type='500m_+72'):
     ds = xarray_from_trajectory(rfnum, trajnum, trajectory_type)
     ds = add_speeds_to_trajectories(ds)
@@ -702,8 +746,8 @@ def make_trajectory(rfnum, trajnum, save=False, trajectory_type='500m_+72'):
     ds = add_advection_to_trajectory(ds)
     print('adding ERA sfc data...')
     ds = add_ERA_sfc_data(ds)
-#     print('adding ERA ensemble data...')
-#     ds = add_ERA_ens_to_trajectory(ds)
+    #print('adding ERA ensemble data...')
+    #ds = add_ERA_ens_to_trajectory(ds)
     print('adding GOES data...')
     ds = add_GOES_obs(ds)
     print("adding MODIS...")
@@ -719,6 +763,12 @@ def make_trajectory(rfnum, trajnum, save=False, trajectory_type='500m_+72'):
     return ds
 
 
+def update_trajectory(name):
+    ds = xr.open_dataset(name)
+    ds = new_add_MERRA_to_trajectory(ds)
+    save_trajectory_to_netcdf(ds, name)
+    
+
 if __name__ == "__main__":
 
     
@@ -732,8 +782,8 @@ if __name__ == "__main__":
         for dirn in ['forward', 'backward']:
             nc_dirstring = '48h_backward' if dirn == 'backward' else '72h_forward'
             for traj in traj_list:
-#                 if traj not in ['2.0']:
-#                     continue
+                #if traj not in ['2.0']:
+                #    continue
                 name = os.path.join(utils.trajectory_netcdf_dir, "{}_{}_{}.nc".format(flight, nc_dirstring, traj))
                 print("working on {}...".format(os.path.basename(name)))
                 if os.path.exists(name):
