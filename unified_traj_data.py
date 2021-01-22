@@ -8,7 +8,6 @@ Created on Fri July  20 14:17:57 2018
 
 import utils
 from . import met_utils
-from . import lagrangian_case as lc
 from CSET_LES import utils as les_utils
 import datetime as dt
 import numpy as np
@@ -679,7 +678,8 @@ def add_CERES_to_trajectory(ds, box_degrees=2):
         ds['CERES_'+var] = (('time'), np.array(means_dict[var]), attrs)
         attrs.update(long_name=attrs['long_name']+', standard deviation over box')
         ds['CERES_'+var+'_std'] = (('time'), np.array(stds_dict[var]), attrs)
-            
+    
+
     ds.attrs['CERES_params'] = f'CERES data is from SYN1deg hourly product; statistics computed over a {box_degrees}-deg average centered on trajectory'
     ds.attrs['CERES_reference'] = f'CERES data available from NASA LARC at ceres.larc.nasa.gov/data.  doi: 10.1175/JTECH-D-12-00136.1, doi: 10.1175/JTECH-D-15-0147.1'
 
@@ -773,7 +773,7 @@ if __name__ == "__main__":
 
     
     force_override = True
-    for case_num, case in lc.all_cases.items():
+    for case_num, case in utils.all_cases.items():
         print('working on case {}'.format(case_num))
         if case_num not in [6, 10]:
             continue

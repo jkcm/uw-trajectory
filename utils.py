@@ -70,6 +70,65 @@ font = {'family' : 'DejaVu Sans',
         'weight' : 'normal'}
 rc('font', **font)
 
+#cset flight case names
+all_cases = {
+    1: {'ALC_name': 'ALC_RF02B-RF03CD',
+        'TLC_name': 'TLC_RF02-RF03_1.0-1.5-2.0',            #opt 1.0, fine
+        'trajectories': [0, 1]},
+    2: {'ALC_name': 'ALC_RF02C-RF03AB',
+        'TLC_name': 'TLC_RF02-RF03_0.5-1.0',                #opt 1.0, fine
+        'trajectories': [0, 1]},
+    3: {'ALC_name': 'ALC_RF04A-RF05CDE',
+        'TLC_name': 'TLC_RF04-RF05_2.0-2.3-2.5-3.0',            #opt 2.0. check
+        'trajectories': [0, 1]},
+    4: {'ALC_name': 'ALC_RF04BC-RF05AB',
+        'TLC_name': 'TLC_RF04-RF05_1.0-2.0',                #opt 2.0, ok
+        'trajectories': [0, 1]},
+    5: {'ALC_name': 'ALC_RF06A-RF07BCDE',
+        'TLC_name': 'TLC_RF06-RF07_3.5-4.0-4.3-4.6-5.0',        #opt 3.0, check 3.5
+        'trajectories': [0, 1]},
+    6: {'ALC_name': 'ALC_RF06BC-RF07A',
+        'TLC_name': 'TLC_RF06-RF07_1.6-2.0-2.3-2.6-3.0',    #opt 1.6, check
+        'trajectories': [0, 1]},
+    7: {'ALC_name': 'ALC_RF08A-RF09DEF',
+        'TLC_name': 'TLC_RF08-RF09_4.0-4.5-5.0',
+        'trajectories': [0, 1]},
+    8: {'ALC_name': 'ALC_RF08B-RF09BC',
+        'TLC_name': 'TLC_RF08-RF09_3.0-3.5', 
+        'trajectories': [0, 1]},
+    9: {'ALC_name': 'ALC_RF08CD-RF09A',
+        'TLC_name': 'TLC_RF08-RF09_1.5-2.0', 
+        'trajectories': [0, 1]},
+    10: {'ALC_name': 'ALC_RF10A-RF11DE',
+        'TLC_name': 'TLC_RF10-RF11_5.5-6.0',                #opt 5.0, removed 
+        'trajectories': [0, 1]},
+    11: {'ALC_name': 'ALC_RF10BC-RF11BC',
+        'TLC_name': 'TLC_RF10-RF11_3.0-3.5-4.0-5.0',        #opt 5.0, fine
+        'trajectories': [0, 1]},
+    12: {'ALC_name': 'ALC_RF10D-RF11A',
+        'TLC_name': 'TLC_RF10-RF11_1.0-1.5',                #opt 1.0, ok
+        'trajectories': [0, 1]},
+    13: {'ALC_name': 'ALC_RF12A-RF13E',
+        'TLC_name': 'TLC_RF12-RF13_4.5',                    #opt 5.0, removed
+        'trajectories': [0, 1]},
+    14: {'ALC_name': 'ALC_RF12B-RF13CD',
+        'TLC_name': 'TLC_RF12-RF13_3.0-3.5',                #added 3.0, ok
+        'trajectories': [0, 1]},
+    15: {'ALC_name': 'ALC_RF12C-RF13B',
+        'TLC_name': 'TLC_RF12-RF13_2.5-3.0',                
+        'trajectories': [0, 1]},
+    16: {'ALC_name': 'ALC_RF14A-RF15CDE',
+        'TLC_name': 'TLC_RF14-RF15_3.5-4.0',            
+        'trajectories': [0, 1]},
+    17: {'ALC_name': 'ALC_RF14B-RF15B',
+        'TLC_name': 'TLC_RF14-RF15_3.0',
+        'trajectories': [0, 1]},    
+    18: {'ALC_name': 'ALC_RF14CD-RF15A',
+        'TLC_name': 'TLC_RF14-RF15_1.0-2.0', 
+        'trajectories': [0, 1]}
+}
+
+
 
 def get_lon_prime(lat, lon, lon0=-140, lat0=30):
         lonp = lon0 + 0.8*(lon-lon0) + 0.4*(lat-lat0)
