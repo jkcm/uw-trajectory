@@ -287,15 +287,28 @@ def add_ERA_to_trajectory(ds, box_degrees=2):
     return ds
     
 
-def add_MERRA_to_trajectory(ds, box_degrees=2):
+def add_MERRA_to_trajectory(ds, box_degrees=2, location='nep'):
     """Add MERRA-inferred aerosol number concentrations to trajectory.
     """ 
     lats, lons, times = ds.lat.values, ds.lon.values, utils.as_datetime(ds.time.values)
     unique_days = set([utils.as_datetime(i).date() for i in times])
-    files = [os.path.join("/home/disk/eos4/jkcm/Data/MERRA/3h/", "more_vertical", "MERRA2_400.inst3_3d_aer_Nv.{:%Y%m%d}.nc4.nc4".format(i))
-             for i in unique_days]
+    if location=='nep':
+        files = [os.path.join("/home/disk/eos4/jkcm/Data/MERRA/3h/", "more_vertical", "MERRA2_400.inst3_3d_aer_Nv.{:%Y%m%d}.nc4.nc4".format(i))
+                for i in unique_days]
     
+    elif location=='sea':
+        files = [os.path.join("/home/disk/eos4/jkcm/Data/MERRA/sea/new/", "MERRA2_400.inst3_3d_aer_Nv.{:%Y%m%d}.SUB.nc".format(i))
+                for i in unique_days]
+
     with xr.open_mfdataset(sorted(files), combine='by_coords') as merra_data:
+        
+        if np.abs(np.mean(ds.lon.values))>90: # i.e. our trajectory is closer to 180 than it is to 0 lon. force to 0-360
+            merra_data.coords['lon'] = merra_data['lon']%360
+            lons = lons%360
+        else:
+            merra_data.coords['lon'] = (merra_data['lon']+180)%360-180
+            lons = (lons+180)%360-180
+
         
 
 
@@ -334,7 +347,7 @@ def add_MERRA_to_trajectory(ds, box_degrees=2):
         vals_to_add = ['ND_McCoy2017', 'ND_McCoy2018', 'Na_tot', 'MERRA_Na_tot_corr', 'H', 'PL', 'RH', 'AIRDENS']
         na_tot = np.zeros_like(merra_data.SS001.values)
         
-        merra_data.coords['lon'] = merra_data['lon']%360
+
 
         new_vals = []
         for varname,params in les_utils.merra_species_dict_colarco.items():
@@ -360,10 +373,11 @@ def add_MERRA_to_trajectory(ds, box_degrees=2):
                 
         
         for var in vals_to_add+new_vals:
-            print(var)
+            # print(var)
+            # print(merra_data[var].shape)
             var_shape = merra_data[var].isel(time=0, lat=0, lon=0).shape
             vals = []
-            for (lat, lon, time) in zip(lats, lons%360, times):
+            for (lat, lon, time) in zip(lats, lons, times):
                 if lat > np.max(merra_data.coords['lat']) or lat < np.min(merra_data.coords['lat']) or \
                     lon > np.max(merra_data.coords['lon']) or lon < np.min(merra_data.coords['lon']):
                     print(f'out of range of data" {lat}, {lon}, {time}')
@@ -372,8 +386,16 @@ def add_MERRA_to_trajectory(ds, box_degrees=2):
                     raise ValueError()
                     #vals.append(np.full(var_shape, float('nan'), dtype='float'))
                     continue
-                x = merra_data[var].sel(lon=slice(lon - box_degrees/2, lon + box_degrees/2),
-                                        lat=slice(lat - box_degrees/2, lat + box_degrees/2))
+                try:
+                    x = merra_data[var].sel(lon=slice(lon - box_degrees/2, lon + box_degrees/2),
+                                            lat=slice(lat - box_degrees/2, lat + box_degrees/2))
+                except KeyError as e:
+                    print(var)
+                    print(lon, lat)
+                    print(merra_data.lon)
+                    print(merra_data.lat)
+
+                    raise e
                 z = x.sel(method='nearest', time=time, tolerance=np.timedelta64(2, 'h'))
                 #this applies a 2D gaussian the width of z, i.e. sigma=box_degrees
                 gauss_shape = tuple([v for v,i in zip(z.shape,z.dims) if i in ['lat', 'lon'] ])
@@ -388,8 +410,8 @@ def add_MERRA_to_trajectory(ds, box_degrees=2):
                 attrs = {'long_name': merra_data[var[:-3]].long_name + ', inferred aerosol number concentration', 'units':'cm**-3'}
             ds['MERRA_'+var] = (tuple(x for x in merra_data[var].dims if x not in ['lat', 'lon']), np.array(vals), attrs)
     
-    ds.pres.attrs['long_name'] = 'model level pressure'
-    ds.pres.attrs['units'] = 'millibars'
+    ds.lev.attrs['long_name'] = 'model level pressure'
+    ds.lev.attrs['units'] = 'millibars'
     
     ds.attrs['MERRA_params'] = f'MERRA-2 data primarily downloaded from NASA GMAO, and statistics computed over a {box_degrees}-deg average centered on trajectory. For aerosol estimates (Na), equivalent aerosol number is computed based on aerosol mass consistent with the MERRA2-assumed aerosol optical properties. Contact jkcm@uw.edu for details.'
     ds.attrs['MERRA_reference'] = 'MERRA-2 data available at https://gmao.gsfc.nasa.gov/reanalysis/MERRA-2. Nd estimates from McCoy et al. (2017) and McCoy et al. (2018): McCoy, D. T., Bender, F. A. ‐M., Mohrmann, J. K. C., Hartmann, D. L., Wood, R., & Grosvenor, D. P. (2017). The global aerosol‐cloud first indirect effect estimated using MODIS, MERRA, and AeroCom. Journal of Geophysical Research: Atmospheres, 122(3), 1779–1796. https://doi.org/10.1002/2016JD026141. McCoy, D. T., Bender, F. A. M., Grosvenor, D. P., Mohrmann, J., Hartmann, D. L., Wood, R., & Field, P. R. (2018). Predicting decadal trends in cloud droplet number concentration using reanalysis and satellite data. Atmospheric Chemistry and Physics, 18(3), 2035–2047. https://doi.org/10.5194/acp-18-2035-2018'
@@ -568,6 +590,11 @@ def add_MODISPBL_to_trajectory(ds, box_degrees=3):
     vals = []   
     stds = []
     nanfrac = []
+    medians = []
+    counts = []
+    mins = []
+    maxs = []
+
     for i in range(len(times)):
         if i in MODIS_day_idx:
             f = dayfile
@@ -577,6 +604,10 @@ def add_MODISPBL_to_trajectory(ds, box_degrees=3):
             vals.append(np.nan)
             stds.append(np.nan)
             nanfrac.append(np.nan)
+            medians.append(np.nan)
+            counts.append(np.nan)
+            mins.append(np.nan)
+            maxs.append(np.nan)
             continue
         with xr.open_dataset(f) as data:
             lat, lon, time = lats[i], lons[i], utils.as_datetime(times[i])
@@ -586,11 +617,19 @@ def add_MODISPBL_to_trajectory(ds, box_degrees=3):
                   latitude=slice(lat + box_degrees/2, lat - box_degrees/2))
             z = x.isel(time=t_idx).values
             vals.append(np.nanmean(z))
+            medians.append(np.nanmedian(z))
+            counts.append(np.sum(~np.isnan(z)))
             stds.append(np.nanstd(z))
             nanfrac.append(np.sum(np.isnan(z))/z.size)
+            mins.append(np.nanmin(z))
+            maxs.append(np.nanmax(z))
     ds['MODIS_CTH'] = (('time'), np.array(vals), {'long_name': 'MODIS cloud top height, box mean', 'units': 'km'})
+    ds['MODIS_CTH_median'] = (('time'), np.array(medians), {'long_name': 'MODIS cloud top height, box median', 'units': 'km'})
     ds['MODIS_CTH_std'] = (('time'), np.array(stds), {'long_name': 'MODIS cloud top height, box standard deviation', 'units': 'km'})
+    ds['MODIS_CTH_min'] = (('time'), np.array(mins), {'long_name': 'MODIS cloud top height, box min', 'units': 'km'})
+    ds['MODIS_CTH_max'] = (('time'), np.array(maxs), {'long_name': 'MODIS cloud top height, box max', 'units': 'km'})
     ds['MODIS_CTH_nanfrac'] = (('time'), np.array(nanfrac), {'long_name': 'MODIS missing pixel fraction', 'units': '0-1'})
+    ds['MODIS_CTH_n_samples'] = (('time'), np.array(counts), {'long_name': 'MODIS CTH number of samples'})
     
     
     
@@ -607,6 +646,7 @@ def add_SSMI_to_trajectory(ds, box_degrees=2):
     cloud_vals_std = np.full_like(lats, fill_value=np.nan)
     vapor_vals_std = np.full_like(lats, fill_value=np.nan)
     wspd_vals_std = np.full_like(lats, fill_value=np.nan)
+    count_vals = np.full_like(lats, fill_value=np.nan)
     sats = ['f15', 'f16' ,'f17', 'f18']
     for sat in sats:
         ssmi_data = xr.open_mfdataset(glob.glob(f'/home/disk/eos9/jkcm/Data/ssmi/all/ssmi_unified_{sat}*.nc'), concat_dim='time', combine='by_coords')
@@ -630,9 +670,12 @@ def add_SSMI_to_trajectory(ds, box_degrees=2):
                     miss = (time-sampletime)/np.timedelta64(1, 'h')
                     if np.abs(miss)<0.5:
                          #print(f'{sat}: found data at {time}, off by {miss} hours. sample fill is {nsample:.0%}')
+                        # print(np.sum(~np.isnan(ds_sub2.cloud).values), np.sum(~np.isnan(ds_sub2.vapor).values), np.sum(~np.isnan(ds_sub2.wspd_mf)).values)
+                        # print(np.size(ds_sub2.nodata.values)-np.sum(ds_sub2.nodata.values), np.sum(~ds_sub2.nodata).values)
                         cloud_vals[i] = np.nanmean(ds_sub2.cloud)
                         vapor_vals[i] = np.nanmean(ds_sub2.vapor)
                         wspd_vals[i] = np.nanmean(ds_sub2.wspd_mf)
+                        count_vals[i] = np.sum(~np.isnan(ds_sub2.cloud))
                         cloud_vals_std[i] = np.nanstd(ds_sub2.cloud)
                         vapor_vals_std[i] = np.nanstd(ds_sub2.vapor)
                         wspd_vals_std[i] = np.nanstd(ds_sub2.wspd_mf)
@@ -642,6 +685,8 @@ def add_SSMI_to_trajectory(ds, box_degrees=2):
     ds['SSMI_WVP'] = (('time'), np.array(vapor_vals), ds_sub2.vapor.attrs)
     ds['SSMI_VWP_std'] = (('time'), np.array(vapor_vals_std), ds_sub2.vapor.attrs)
     ds['SSMI_WSPD'] = (('time'), np.array(wspd_vals), ds_sub2.wspd_mf.attrs)
+    ds['SSMI_WSPD_std'] = (('time'), np.array(wspd_vals_std), ds_sub2.wspd_mf.attrs)
+    ds['SSMI_n_samples'] = (('time'), np.array(count_vals), {'long_name': 'SSMI number of data samples'})
     ds['SSMI_WSPD_std'] = (('time'), np.array(wspd_vals_std), ds_sub2.wspd_mf.attrs)
     for i in ['SSMI_LWP_std', 'SSMI_VWP_std', 'SSMI_WSPD_std']:
         ds[i].attrs['long_name'] = ds[i].attrs['long_name']+' standard deviation over box'
