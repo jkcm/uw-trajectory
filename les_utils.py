@@ -5,10 +5,21 @@ author: Hans Mohrmann (jkcm@uw.edu)
 some utility functions for CSET and MERRA projects
 """
 
-import numpy as np
+#Standard library
 import collections
-from scipy import stats 
+import datetime as dt
+from functools import lru_cache
+import math
+
+#Specials
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import pytz
+from scipy.special import erf
+from scipy import stats 
+
+
 
 def get_lon_prime(lat, lon, lon0=-140, lat0=30):
         lonp = lon0 + 0.8*(lon-lon0) + 0.4*(lat-lat0)
@@ -109,16 +120,45 @@ era_species_dict_reddy = {
     }
 
     
-    
 
+@lru_cache(maxsize=500)
+def get_bounded_lognormal_frac(r_max, r_min, std_dev, mode_radius):
+    """
+    some notes: mode radius = same as 1/2 of median diameter, then using Zender eq 27
+    so mode radius is Zender's D-tilde_n/2
+    std dev here is NOT the same as std dev in the Grainger text. std dev should be somewhere around 2. 
+    this will give n(rmin,rmax)/n0, or else v(rmin,rmax)/n0, if the volume median radius is provided instead of the median radius.
 
-# def mass_to_number(mass, radius_particle, density_particle, density_air):
-# #     """This is how the idiots do it
-# #     """
-# #     vol_particle = np.pi*(4/3)*(radius_particle**3)
-# #     num = mass/(density_particle*vol_particle)*density_air*1e-6 # to cm3
-# #     return num
+    """
+    n_over_n0 = 0.5*(erf(np.log(r_max/mode_radius)/(np.sqrt(2)*np.log(std_dev))) - erf(np.log(r_min/mode_radius)/(np.sqrt(2)*np.log(std_dev))))
+    return n_over_n0
 
+@lru_cache(maxsize=500)
+def get_v0_over_n0(r_max, r_min, std_dev, mode_radius):
+    vol_mode_radius = mode_radius*np.exp(3*(np.log(std_dev)**2)) # this is D-tilde_v/2 from Zender.
+    print(mode_radius)
+    print(vol_mode_radius)
+    v0_over_n0 = get_bounded_lognormal_frac(r_max, r_min, std_dev, vol_mode_radius)
+    return v0_over_n0
+
+def get_n0(mass, density, r_max, r_min, std_dev, mode_radius):
+    v0_over_n0 = get_v0_over_n0(r_max, r_min, std_dev, mode_radius)
+    n0 = mass*1e18/(density*v0_over_n0)
+    return n0
+
+def get_n_subset(n0, r_min, r_max, std_dev, mode_radius):
+    """this is for subsetting for a bounded range after n0 has been calculated 
+    """
+    n_over_n0 = get_bounded_lognormal_frac(r_max, r_min, std_dev, mode_radius)
+    n = n_over_n0 * n0
+    return n
+
+def get_m_subset(density, n0, r_min, r_max, std_dev, mode_radius):
+    vol_mode_radius = mode_radius*np.exp(3*np.log(std_dev)**2) # this is D-tilde_v/2 from Zender.
+    v_over_n0 = get_bounded_lognormal_frac(r_max, r_min, std_dev, vol_mode_radius)
+    v = n0*v_over_n0/1e18
+    m = v*density
+    return m
 
 
 def mass_to_number(mass, air_density, shape_params):

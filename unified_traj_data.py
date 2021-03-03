@@ -308,8 +308,31 @@ def add_MERRA_to_trajectory(ds, box_degrees=2, location='nep'):
         else:
             merra_data.coords['lon'] = (merra_data['lon']+180)%360-180
             lons = (lons+180)%360-180
-
         
+#         #adding in airdens variable # DEC UNNECESSARY
+#         rho = []
+#         var_shape = merra_data['AIRDENS'].isel(time=0, lat=0, lon=0).shape
+#         for (lat, lon, time) in zip(lats, lons, times):
+#                 if lat > np.max(merra_data.coords['lat']) or lat < np.min(merra_data.coords['lat']) or \
+#                     lon > np.max(merra_data.coords['lon']) or lon < np.min(merra_data.coords['lon']):
+#                     print(f'out of range of data" {lat}, {lon}, {time}')
+#                     print(merra_data.coords['lat'])
+#                     print(merra_data.coords['lon'])
+#                     raise ValueError()
+#                     vals.append(np.full(var_shape, float('nan'), dtype='float'))
+#                     continue
+#                 x = merra_data['AIRDENS'].sel(lon=slice(lon - box_degrees/2, lon + box_degrees/2),
+#                                         lat=slice(lat - box_degrees/2, lat + box_degrees/2))
+#                 z = x.sel(method='nearest', time=time, tolerance=np.timedelta64(2, 'h'))
+#                 #this applies a 2D gaussian the width of z, i.e. sigma=box_degrees
+#                 gauss_shape = tuple([v for v,i in zip(z.shape,z.dims) if i in ['lat', 'lon'] ])
+#                 gauss = gauss2D(shape=gauss_shape, sigma=gauss_shape[-1])
+#                 filtered = z * gauss
+#                 rho.append(filtered.sum(dim=('lat', 'lon')).values)
+#         ds['MERRA_AIRDENS'] = (tuple(x for x in merra_data['AIRDENS'].dims if x not in ['lat', 'lon']), 
+#                                np.array(rho), merra_data['AIRDENS'].attrs)
+    
+    
 
 
         merra_data = merra_data.sel(lat=slice(np.min(lats)-2, np.max(lats)+2), lon=slice(np.min(lons)-2, np.max(lons)+2))
@@ -336,15 +359,15 @@ def add_MERRA_to_trajectory(ds, box_degrees=2, location='nep'):
 
         
 
-        merra_data['ND_McCoy2017'] = 10**(0.41*np.log10(merra_data.SO4*10**9) + 2.11).compute()
-        merra_data['ND_McCoy2018'] = 10**(0.08*np.log10(merra_data.SO4*10**9)-0.04*np.log10(merra_data.DU001*10**9) 
-                                          +0.07*np.log10(merra_data.BCPHILIC*10**9)+0.03*np.log10(merra_data.OCPHILIC*10**9) 
-                                          -0.02*np.log10(merra_data.SS001*10**9)+1.96)
+#         merra_data['ND_McCoy2017'] = 10**(0.41*np.log10(merra_data.SO4*10**9) + 2.11).compute()
+#         merra_data['ND_McCoy2018'] = 10**(0.08*np.log10(merra_data.SO4*10**9)-0.04*np.log10(merra_data.DU001*10**9) 
+#                                           +0.07*np.log10(merra_data.BCPHILIC*10**9)+0.03*np.log10(merra_data.OCPHILIC*10**9) 
+#                                           -0.02*np.log10(merra_data.SS001*10**9)+1.96)
 
-        merra_data.ND_McCoy2017.attrs = {'long_name': 'Nd from sulfate-only regression', 'units': 'cm**-3'}
-        merra_data.ND_McCoy2018.attrs = {'long_name': 'Nd from multi-species regression', 'units': 'cm**-3'}
+#         merra_data.ND_McCoy2017.attrs = {'long_name': 'Nd from sulfate-only regression', 'units': 'cm**-3'}
+#         merra_data.ND_McCoy2018.attrs = {'long_name': 'Nd from multi-species regression', 'units': 'cm**-3'}
         
-        vals_to_add = ['ND_McCoy2017', 'ND_McCoy2018', 'Na_tot', 'MERRA_Na_tot_corr', 'H', 'PL', 'RH', 'AIRDENS']
+        vals_to_add = ['Na_tot', 'MERRA_Na_tot_corr', 'H', 'PL', 'RH', 'AIRDENS']
         na_tot = np.zeros_like(merra_data.SS001.values)
         
 
@@ -362,8 +385,9 @@ def add_MERRA_to_trajectory(ds, box_degrees=2, location='nep'):
         merra_data['Na_tot'] = (('time', 'lev', 'lat', 'lon'), na_tot, {'long_name': 'total aerosol number concentration, >100 um', 'units': 'cm**-3'})
 
         merra_data['MERRA_Na_tot_corr'] = (('time', 'lev', 'lat', 'lon'), np.exp(1.24*np.log(na_tot) + 0.18), {'long_name': 'total aerosol number concentration, >100 um, corrected to aircraft', 'units': 'cm**-3'})  
-        merra_data['MERRA_Na_tot_corr_FT'] = (('time', 'lev', 'lat', 'lon'), np.exp(0.81*np.log(na_tot) + 1.25), {'long_name': 'total aerosol number concentration, >100 um, corrected to aircraft (free-tropospheric obs only)', 'units': 'cm**-3'})  
-        merra_data['MERRA_Na_tot_corr_BL'] = (('time', 'lev', 'lat', 'lon'), np.exp(1.82*np.log(na_tot) - 1.28), {'long_name': 'total aerosol number concentration, >100 um, corrected to aircraft (boundary layer obs only)', 'units': 'cm**-3'})  
+#         merra_data['MERRA_Na_tot_corr_FT'] = (('time', 'lev', 'lat', 'lon'), np.exp(0.81*np.log(na_tot) + 1.25), {'long_name': 'total aerosol number concentration, >100 um, corrected to aircraft (free-tropospheric obs only)', 'units': 'cm**-3'})  
+#         merra_data['MERRA_Na_tot_corr_BL'] = (('time', 'lev', 'lat', 'lon'), np.exp(1.82*np.log(na_tot) - 1.28), {'long_name': 'total aerosol number concentration, >100 um, corrected to aircraft (boundary layer obs only)', 'units': 'cm**-3'})  
+    merra_data['MERRA_Na_tot_corr_BL_logfit'] = (('time', 'lev', 'lat', 'lon'), np.exp(0.63*np.log(na_tot) + 2.42), {'long_name': 'total aerosol number concentration, >100 um, corrected to aircraft (boundary layer obs only)', 'units': 'cm**-3'})  
                    
                    
         ds = ds.assign_coords(lev = les_utils.MERRA_lev(merra_data.lev))
@@ -414,7 +438,8 @@ def add_MERRA_to_trajectory(ds, box_degrees=2, location='nep'):
     ds.lev.attrs['units'] = 'millibars'
     
     ds.attrs['MERRA_params'] = f'MERRA-2 data primarily downloaded from NASA GMAO, and statistics computed over a {box_degrees}-deg average centered on trajectory. For aerosol estimates (Na), equivalent aerosol number is computed based on aerosol mass consistent with the MERRA2-assumed aerosol optical properties. Contact jkcm@uw.edu for details.'
-    ds.attrs['MERRA_reference'] = 'MERRA-2 data available at https://gmao.gsfc.nasa.gov/reanalysis/MERRA-2. Nd estimates from McCoy et al. (2017) and McCoy et al. (2018): McCoy, D. T., Bender, F. A. ‐M., Mohrmann, J. K. C., Hartmann, D. L., Wood, R., & Grosvenor, D. P. (2017). The global aerosol‐cloud first indirect effect estimated using MODIS, MERRA, and AeroCom. Journal of Geophysical Research: Atmospheres, 122(3), 1779–1796. https://doi.org/10.1002/2016JD026141. McCoy, D. T., Bender, F. A. M., Grosvenor, D. P., Mohrmann, J., Hartmann, D. L., Wood, R., & Field, P. R. (2018). Predicting decadal trends in cloud droplet number concentration using reanalysis and satellite data. Atmospheric Chemistry and Physics, 18(3), 2035–2047. https://doi.org/10.5194/acp-18-2035-2018'
+    ds.attrs['MERRA_reference'] = 'MERRA-2 data available at https://gmao.gsfc.nasa.gov/reanalysis/MERRA-2.'
+#     Nd estimates from McCoy et al. (2017) and McCoy et al. (2018): McCoy, D. T., Bender, F. A. ‐M., Mohrmann, J. K. C., Hartmann, D. L., Wood, R., & Grosvenor, D. P. (2017). The global aerosol‐cloud first indirect effect estimated using MODIS, MERRA, and AeroCom. Journal of Geophysical Research: Atmospheres, 122(3), 1779–1796. https://doi.org/10.1002/2016JD026141. McCoy, D. T., Bender, F. A. M., Grosvenor, D. P., Mohrmann, J., Hartmann, D. L., Wood, R., & Field, P. R. (2018). Predicting decadal trends in cloud droplet number concentration using reanalysis and satellite data. Atmospheric Chemistry and Physics, 18(3), 2035–2047. https://doi.org/10.5194/acp-18-2035-2018'
     
     return ds
 
@@ -575,11 +600,6 @@ def add_ERA_sfc_data(ds, box_degrees=2):
     return ds
 
 
-def add_GOES_obs(ds):
-    #rfnum = ds['']
-    return ds
-
-
 def add_MODISPBL_to_trajectory(ds, box_degrees=3):
     lats, lons, times = ds.lat.values, ds.lon.values, ds.time.values
     MODIS_day_idx = np.argwhere([i.hour == 23 for i in utils.as_datetime(times)]).squeeze()
@@ -724,6 +744,11 @@ def add_CERES_to_trajectory(ds, box_degrees=2):
         attrs.update(long_name=attrs['long_name']+', standard deviation over box')
         ds['CERES_'+var+'_std'] = (('time'), np.array(stds_dict[var]), attrs)
     
+    #adding ND
+    nd = 1.4067 * 10**4 * (ds.CERES_cldtau_low_1h.values ** 0.5) / (ds.CERES_cldwatrad_low_1h**2.5)
+    ds['CERES_Nd'] = (('time'), nd, {'long_name': 'cloud droplet number concentration',
+     'units': 'cm**-3'})
+    ds.attrs['CERES_reference'] = ds.CERES_reference + '\n CERES Nd derived following Painemal and Zuidema (2011), eqn 7 (doi:10.1029/2011JD016155).'
 
     ds.attrs['CERES_params'] = f'CERES data is from SYN1deg hourly product; statistics computed over a {box_degrees}-deg average centered on trajectory'
     ds.attrs['CERES_reference'] = f'CERES data available from NASA LARC at ceres.larc.nasa.gov/data.  doi: 10.1175/JTECH-D-12-00136.1, doi: 10.1175/JTECH-D-15-0147.1'
@@ -781,7 +806,6 @@ def add_amsr_to_trajectory(ds, box_degrees=2):
     return ds
 
 
-
 def make_trajectory(rfnum, trajnum, save=False, trajectory_type='500m_+72'):
     ds = xarray_from_trajectory(rfnum, trajnum, trajectory_type)
     ds = add_speeds_to_trajectories(ds)
@@ -814,6 +838,91 @@ def update_trajectory(name):
     save_trajectory_to_netcdf(ds, name)
     
 
+def add_AMSR_to_trajectory(ds, box_degrees=2):
+    lats, lons, times = ds.lat.values, ds.lon.values%360, ds.time.values
+    # daynight = {}
+    amsr_prcp_mean = np.full(len(lats), fill_value=np.nan)
+    amsr_prcp_std = np.full(len(lats), fill_value=np.nan)
+    amsr_prcp_count = np.full(len(lats), fill_value=np.nan)
+    amsr_prcp_dist = np.full((len(lats), 9), fill_value=np.nan)
+    for dn in ['day', 'night']:
+        # print(f'processing amsr {dn}time')
+        precip_data = xr.open_mfdataset(np.unique([f"/home/disk/eos5/rmeast/rain_rates_89/{i.year}/AMSR2_89GHz_pcp_est_{i.year}_{i.dayofyear:03}_{dn}.nc" 
+                                                    for i in pd.DatetimeIndex(ds.time.values)]), combine='nested', concat_dim='time')
+        year = precip_data.time_vars.isel(yr_day_utc=0).values
+        day = precip_data.time_vars.isel(yr_day_utc=1).values
+        utc = precip_data.time_vars.isel(yr_day_utc=2).values
+        total_secs = (utc*3600)
+        secs = total_secs//1
+        msecs = 1000*total_secs%1
+        dtime = np.datetime64(f'{np.median(year):0.0f}-01-01')+np.timedelta64(1, 'D')*(day-1)+np.timedelta64(1, 's')*(secs)+np.timedelta64(1, 'ms')*(msecs)
+        precip_data['time'] = (('time'), dtime)
+        precip_data = precip_data.drop(labels=['time_vars'])
+        precip_data['longitude'] = precip_data['longitude']%360
+
+
+        # filtering out the misaligned times, couple scans at day start/end
+        tdiff = np.diff(precip_data.time)/np.timedelta64(1, 'h')
+        ups = np.argwhere(tdiff>20).flatten()
+        downs = np.argwhere(tdiff<-20).flatten()
+        if len(ups)<len(downs):
+            if len(ups) == 0: # starting with a misalignment and only one error:
+                ups = np.insert(ups, 0, 0) 
+            elif ups[0]>downs[0] : # also starting with a misalignment; this is done in a kludgy way to avoid an index error
+                ups = np.insert(ups, 0, 0) # chop off from 0 to first down
+        good = np.ones(precip_data.time.shape).astype(bool)
+        for (u,d) in zip(ups, downs):
+            good[u:d+1] = np.zeros_like(good[u:d+1])
+        precip_data = precip_data.isel(time=good)
+
+        #actual statistics come here
+
+        for i, (lat, lon, time) in enumerate(zip(lats, lons, times)):
+            try:
+                ds_sub = precip_data.sel(time=slice(time-np.timedelta64(1, 'h'), time+np.timedelta64(1, 'h')))
+            except (ValueError, KeyError) as e:
+                raise e
+            good = np.logical_and(np.abs(ds_sub.latitude-lat)<1, np.abs(ds_sub.longitude-lon)<1)
+            n_good = np.sum(good).values
+            n_agood = 0
+            if n_good > 100: # at least 100 actual pixels in the swath
+                actual_good = ds_sub.rain_stats.isel(prob_rate_rwr_max=0).where(good)>0
+                n_agood = np.sum(actual_good).values
+                # print(f'{dn}: {i}, {time} inside swath')
+            else:
+                pass #outside of swath
+            if n_agood > 100: # at least 100 pixels with a valid retrieval
+                g_rate = ds_sub.rain_stats.isel(prob_rate_rwr_max=1).where(good).values.flatten()[good.values.flatten()]
+                g_rate = g_rate[~np.isnan(g_rate)] # this should be redundant
+
+                for var in [g_rate]:
+                    var = var[~np.isnan(var)]
+                    sorted_var = sorted(var)
+                    cumsum = np.cumsum(sorted_var)
+                    pctiles = np.linspace(0.1*np.sum(var), 0.9*np.sum(var), 9)
+                    pct_vals = np.array([sorted_var[j] for j in [np.argmax(cumsum>=i) for i in pctiles]])
+
+                    
+                amsr_prcp_mean[i] = np.nanmean(g_rate)
+                amsr_prcp_std[i] = np.nanstd(g_rate)
+                amsr_prcp_count[i] = n_agood
+                amsr_prcp_dist[i] = pct_vals
+            else:
+                pass # leave it as nans
+            
+    ds['AMSR_prcp_mean'] = (('time'), amsr_prcp_mean, {'long_name': 'AMSR Tb mean rain rate', 'units': 'mm hr^-1'})
+    ds['AMSR_prcp_std'] = (('time'), amsr_prcp_std, {'long_name': 'AMSR Tb rain rate standard deviation', 'units': 'mm hr^-1'})
+    ds['AMSR_prcp_n_samples'] = (('time'), amsr_prcp_count, {'long_name': 'AMSR Tb rain rate sample count', 'units': ''})
+    ds['AMSR_prcp_dist'] = (('time', 'AMSR_prcp_pctile'), amsr_prcp_dist, {'long_name': 'AMSR Tb rain rate cumulative distribution', 'units': 'mm hr^-1'})
+    ds['AMSR_prcp_pctile'] = (('AMSR_prcp_pctile'), np.linspace(10, 90, 9), {'long_name': 'rain below value in amsr_prcp_dist explains this much of all precipitation'})
+    
+
+    ds.attrs['AMSR_params'] = f'AMSR data statistics computed over a {box_degrees}-deg average centered on trajectory, only when > 100 samples are present'
+    ds.attrs['AMSR_reference'] = f'AMSR precipitation is derived from 89 GHz brightness temperature, from Eastman, R., Lebsock, M., & Wood, R. (2019). Warm Rain Rates from AMSR-E 89-GHz Brightness Temperatures Trained Using CloudSat Rain-Rate Observations. Journal of Atmospheric and Oceanic Technology, 36(6), 1033–1051. https://doi.org/10.1175/JTECH-D-18-0185.1'
+
+    return ds    
+    
+    
 if __name__ == "__main__":
 
     
