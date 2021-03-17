@@ -1,4 +1,4 @@
-# uw-trace
+# uw-trajectory
 University of Washington Trajectory Colocated Extraction
 
 Maintainers:
