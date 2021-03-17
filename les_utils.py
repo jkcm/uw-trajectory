@@ -18,12 +18,28 @@ import pandas as pd
 import pytz
 from scipy.special import erf
 from scipy import stats 
+from functools import lru_cache
 
+
+
+############################################################################
+#
+#                general use functions and variables
+#
+############################################################################
 
 
 def get_lon_prime(lat, lon, lon0=-140, lat0=30):
         lonp = lon0 + 0.8*(lon-lon0) + 0.4*(lat-lat0)
         return lonp
+    
+    
+def find_nearest(array,value):
+    idx = np.searchsorted(array, value, side="left")
+    if idx > 0 and (idx == len(array) or math.fabs(value - array[idx-1]) < math.fabs(value - array[idx])):
+        return idx-1
+    else:
+        return idx
     
     
 lev_map = {'1': 0.0100, '2': 0.0200, '3': 0.0327, '4': 0.0476,
@@ -44,6 +60,7 @@ lev_map = {'1': 0.0100, '2': 0.0200, '3': 0.0327, '4': 0.0476,
            '61': 820.0000, '62': 835.0000, '63': 850.0000, '64': 865.0000,
            '65': 880.0000, '66': 895.0000, '67': 910.0000, '68': 925.0000,
            '69': 940.0000, '70': 955.0000, '71': 970.0000, '72': 985.0000}
+
 
 pres_map = {}
 for k, v in lev_map.items():
@@ -69,7 +86,7 @@ def MERRA_lev(lev, invert=False, lev_map=lev_map):
     return pres
 
 merra_species_dict_colarco = {
-    
+
       # NOTE: SST Rm is a guess, based on Re and lognormal
           # NOTE: Dust Rm is a guess, based on Re and lognormal, not great
 
@@ -92,8 +109,32 @@ merra_species_dict_colarco = {
     }
 
 
+
+
+############################################################################
+#
+#                functions for CAMS conversions
+#
+############################################################################
+
+
 era_name_map = {'aermr01': 'SS001', 'aermr02': 'SS002', 'aermr03': 'SS003', 'aermr04': 'DU001', 'aermr05': 'DU002', 'aermr06': 'DU003', 
                 'aermr07': 'OCPHILIC', 'aermr08': 'OCPHOBIC', 'aermr09': 'BCPHILIC', 'aermr10': 'BCPHOBIC', 'aermr11': 'SO4'}
+
+
+Muskatel_CAMS_lookup = {
+'aermr01': [9.5491368106e-18, 9.5491368106e-18, 9.5491368106e-18, 9.5491368106e-18, 2.8508222886e-17, 3.5552048177e-17, 4.4141680140e-17, 5.5592627265e-17, 7.5022872211e-17, 9.2401351367e-17, 1.2548908641e-16, 2.2733094176e-16],
+'aermr02': [4.2343711220e-16, 4.2343711220e-16, 4.2343711220e-16, 4.2343711220e-16, 1.2643975497e-15, 1.5768574457e-15, 1.9580637788e-15, 2.4653863535e-15, 3.3268891197e-15, 4.0977089657e-15, 5.5658632784e-15, 1.0083678901e-14],
+'aermr03': [1.1890425978e-15, 1.1890425978e-15, 1.1890425978e-15, 1.1890425978e-15, 3.5504471910e-15, 4.4278271135e-15, 5.4982035375e-15, 6.9229124851e-15, 9.3420826653e-15, 1.1506545624e-14, 1.5628979584e-14, 2.8314815079e-14],
+'aermr04': [2.8694347373e-16, 2.8694347373e-16, 2.8694347373e-16, 2.8694347373e-16, 2.8694347373e-16, 2.8694347373e-16, 2.8694347373e-16, 2.8694347373e-16, 2.8694347373e-16, 2.8694347373e-16, 2.8694347373e-16, 2.8694347373e-16],
+'aermr05': [4.7291076037e-16, 4.7291076037e-16, 4.7291076037e-16, 4.7291076037e-16, 4.7291076037e-16, 4.7291076037e-16, 4.7291076037e-16, 4.7291076037e-16, 4.7291076037e-16, 4.7291076037e-16, 4.7291076037e-16, 4.7291076037e-16],
+'aermr06': [1.5569834525e-15, 1.5569834525e-15, 1.5569834525e-15, 1.5569834525e-15, 1.5569834525e-15, 1.5569834525e-15, 1.5569834525e-15, 1.5569834525e-15, 1.5569834525e-15, 1.5569834525e-15, 1.5569834525e-15, 1.5569834525e-15],
+'aermr07': [1.3411058245e-18, 1.5524975799e-18, 1.7367708373e-18, 1.9869071216e-18, 2.2599763045e-18, 2.5569842145e-18, 2.8789366803e-18, 3.2268395306e-18, 4.0045196995e-18, 4.8980713505e-18, 5.9155411131e-18, 8.9112054687e-18],
+'aermr08': [4.9135101849e-19, 4.9135101849e-19, 4.9135101849e-19, 4.9135101849e-19, 4.9135101849e-19, 4.9135101849e-19, 4.9135101849e-19, 4.9135101849e-19, 4.9135101849e-19, 4.9135101849e-19, 4.9135101849e-19, 4.9135101849e-19],
+'aermr09': [5.9773588135e-20, 6.9195324740e-20, 7.7408384085e-20, 8.8556952333e-20, 1.0072763231e-19, 1.1396525317e-19, 1.2831464408e-19, 1.4382063418e-19, 1.7848172858e-19, 2.1830716962e-19, 2.6365559054e-19, 3.9717161997e-19],
+'aermr10': [5.9773588135e-20, 5.9773588135e-20, 5.9773588135e-20, 5.9773588135e-20, 5.9773588135e-20, 5.9773588135e-20, 5.9773588135e-20, 5.9773588135e-20, 5.9773588135e-20, 5.9773588135e-20, 5.9773588135e-20, 5.9773588135e-20],
+'aermr11': [2.8658111470e-18, 2.8658111470e-18, 2.8658111470e-18, 2.8658111470e-18, 4.5781613964e-18, 5.2038774089e-18, 6.0382576467e-18, 7.2566325298e-18, 9.3848411035e-18, 1.1325129380e-17, 1.4889880922e-17, 2.5975608980e-17]
+}
 
 
 era_species_dict_reddy = {
@@ -111,15 +152,68 @@ era_species_dict_reddy = {
     'BCPHILIC': dict(dist='lognormal', density=1800, geometric_std_dev=2.0, mode_radius=0.0118),
     'BCPHOBIC': dict(dist='lognormal', density=1800, geometric_std_dev=2.0, mode_radius=0.0118),
     'SO4': dict(dist='lognormal', density=1840, geometric_std_dev=2.0, mode_radius=0.0355),
-    'DU001': dict(dist='trunc_lognormal', mode_radius=0.135, density=2160, geometric_std_dev=2.0, lower=0.1, upper=0.55), # lower is actually 0.03.
-    'DU002': dict(dist='trunc_lognormal', mode_radius=0.704, density=2160, geometric_std_dev=2.0, lower=0.55, upper=0.9),
-    'DU003': dict(dist='trunc_lognormal', mode_radius=4.4, density=2160, geometric_std_dev=2.0, lower=0.9, upper=20),
-#     'SS001': dict(dist='trunc_lognormal', mode_radius=0.125, density=2600, geometric_std_dev=2.0, lower=0.1, upper=0.5), lower is actually 0.03
-#     'SS002': dict(dist='trunc_lognormal', mode_radius=1.6, density=2600, geometric_std_dev=2.0, lower=0.5, upper=5.0),
-#     'SS003': dict(dist='trunc_lognormal', mode_radius=10, density=2600, geometric_std_dev=2.0, lower=5.0, upper=20),
+    'DU001': dict(dist='trunc_lognormal', mode_radius=0.29, median_radius=0.135, density=2160, geometric_std_dev=2.0, lower=0.1, upper=0.55), # lower is actually 0.03.
+    'DU002': dict(dist='trunc_lognormal', mode_radius=0.29, median_radius=0.704, density=2160, geometric_std_dev=2.0, lower=0.55, upper=0.9),
+    'DU003': dict(dist='trunc_lognormal', mode_radius=0.29, median_radius=4.4, density=2160, geometric_std_dev=2.0, lower=0.9, upper=20),
+    'SS001': dict(dist='CAMS_SS', mode_radius=[0.1992, 1.992], density=1183, geometric_std_dev=[1.9,2.0], lower=0.03, upper=0.5), #lower is actually 0.03
+    'SS002': dict(dist='CAMS_SS', mode_radius=[0.1992, 1.992], density=1183, geometric_std_dev=[1.9,2.0], lower=0.5, upper=5.0),
+    'SS003': dict(dist='CAMS_SS', mode_radius=[0.1992, 1.992], density=1183, geometric_std_dev=[1.9,2.0], lower=5.0, upper=20),
     }
 
+
+def mass_to_number_CAMS(mass, RH, air_density, name):
+    vol_mean_mass = Muskatel_CAMS_lookup[era_name_map_rev[name]]
+
+    RH_t = [0, 10, 20, 30, 40, 50, 60, 70, 80, 85, 90, 95]
+
+    vfunc = np.vectorize(lambda x: vol_mean_mass[find_nearest(RH_t, x)])
+
+    mean_masses = vfunc(RH)
+    # mean_masses = np.array([vol_mean_mass[find_nearest(RH_t, i)] for i in RH])
+    n = mass*air_density/mean_masses*1e-6
+    return n
+
+
+
+def mass_to_number_CAMS_SS(mass, particle_density, air_density, mode_radius, geo_std_dev, lower_lim, upper_lim):
+
+
+    mu_g = mode_radius
+    sigma_g = geo_std_dev
+
+    mu = np.log(mu_g)
+    sigma = np.log(sigma_g)
+
+    mu_vol = mu + 3*sigma**2
+    mu_vol_g = np.exp(mu_vol)
+
+    novo = 3/(4*np.pi*np.exp(3*mu + 4.5*sigma**2))
     
+    if upper_lim:
+        lower_lim, upper_lim, sigma, mu_g, mu_vol_g, 
+
+        x=np.linspace(lower_lim,upper_lim,1000)
+        pdf = stats.lognorm.pdf(x, s=sigma, loc=0, scale=mu_g) # original distribution
+        pdf_vol = stats.lognorm.pdf(x, s=sigma, loc=0, scale=mu_vol_g) # original distribution
+
+        idx = np.logical_and(x<upper_lim, x>=lower_lim)
+        frac = np.trapz(pdf[idx], x[idx])/np.trapz(pdf_vol[idx], x[idx])
+
+
+        novo = novo*frac
+    
+    n_0 = novo*mass/particle_density*1e18 # per um3 to per m3
+    num_cm3 = air_density*n_0*1e-6
+    
+    return num_cm3
+
+
+
+############################################################################
+#
+#                functions for converting mass to number using erf
+#
+############################################################################
 
 @lru_cache(maxsize=500)
 def get_bounded_lognormal_frac(r_max, r_min, std_dev, mode_radius):
@@ -161,6 +255,13 @@ def get_m_subset(density, n0, r_min, r_max, std_dev, mode_radius):
     return m
 
 
+
+############################################################################
+#
+#           functions for converting mass to number using integration
+#
+############################################################################
+
 def mass_to_number(mass, air_density, shape_params):
     if shape_params['dist'] == 'trunc_lognormal':
         return mass_to_number_trunc_lognormal(mass=mass, particle_density=shape_params['density'], mode_radius=shape_params['mode_radius'], 
@@ -179,9 +280,6 @@ def mass_to_number(mass, air_density, shape_params):
         raise ValueError('shape params dist type not recognized')
 
         
-
-
-
 def mass_to_number_lognormal(mass, particle_density, mode_radius, geo_std_dev, air_density):
     """ Calculates the number concentration for a lognormal mode, given mass and mode parameters
     
@@ -199,30 +297,32 @@ def mass_to_number_lognormal(mass, particle_density, mode_radius, geo_std_dev, a
     TODO doctstring plz
     """
     
-#     modal_radius = effective_radius * np.exp(-2.5*np.log(geo_std_dev)**2)*1e-6    
-    exp = np.exp(-4.5*np.log(geo_std_dev)**2)
-    num_kg = 3*mass*exp/(particle_density*4*np.pi*mode_radius**3)*1e18 # per um3 to per m3
+    @lru_cache(maxsize=500)
+    def num_per_mass(geo_std_dev, particle_density, mode_radius):
+        exp = np.exp(-4.5*np.log(geo_std_dev)**2)
+        num_per_mass = 3*exp/(particle_density*4*np.pi*mode_radius**3)*1e18 # per um3 to per m3
+        return num_per_mass
     
+    num_kg = mass*num_per_mass(geo_std_dev, particle_density, mode_radius)
     num_cm3 = air_density*num_kg*1e-6
-    
-    
-#     vol_particle = np.pi*(4/3)*(radius_particle**3)
-#     num = mass/(density_particle*vol_particle)*density_air*1e-6 # to cm3
     return num_cm3
 
 def mass_to_number_trunc_MG(mass, particle_density, air_density, upper_lim, lower_lim):
     # using eqn 2 from here: https://agupubs.onlinelibrary.wiley.com/doi/epdf/10.1029/2003GB002079
     
-    r=np.linspace(lower_lim,upper_lim,100)
-    Theta = 30
-    A = 4.7*(1+Theta*r)**(-0.017*r**-1.44)
-    B = (0.433 - np.log10(r))/0.433
-    
-    dfdr = r**(-A)*(1+0.057*r**3.45)*10**(1.607*np.exp(-B**2))
-    
-    dfdn = dfdr*(r**3)
-    novo = (3/(4*np.pi))*(np.trapz(dfdr, x=r)/np.trapz(dfdn, x=r))    
-    n_0 = novo*mass/particle_density*1e18 # per um3 to per m3
+  
+    @lru_cache(maxsize=500)
+    def n0_per_v0(lower_lim, upper_lim):
+        r=np.linspace(lower_lim,upper_lim,100)
+        Theta = 30
+        A = 4.7*(1+Theta*r)**(-0.017*r**-1.44)
+        B = (0.433 - np.log10(r))/0.433
+        dfdr = r**(-A)*(1+0.057*r**3.45)*10**(1.607*np.exp(-B**2))
+        dfdn = dfdr*(r**3)
+        n0_per_v0 = (3/(4*np.pi))*(np.trapz(dfdr, x=r)/np.trapz(dfdn, x=r))    
+        return n0_per_v0
+        
+    n_0 = n0_per_v0(lower_lim, upper_lim)*mass/particle_density*1e18 # per um3 to per m3
     num_cm3 = air_density*n_0*1e-6
     
     return num_cm3
@@ -230,66 +330,72 @@ def mass_to_number_trunc_MG(mass, particle_density, air_density, upper_lim, lowe
 
 
 
-def mass_to_number_trunc_lognormal(mass, particle_density, mode_radius, geo_std_dev, air_density, upper_lim=None, lower_lim=0.1):
-    mu_g = mode_radius
-    sigma_g = geo_std_dev
+def mass_to_number_trunc_lognormal(mass, particle_density, mode_radius, geo_std_dev, air_density, upper_lim, lower_lim):
+    #get the mass to number the old way, by integrating.
+    @lru_cache(maxsize=500)
+    def n0_per_v0(mode_radius, geo_std_dev, upper_lim, lower_lim):
+        mu_g = mode_radius
+        sigma_g = geo_std_dev
 
-    mu = np.log(mu_g)
-    sigma = np.log(sigma_g)
+        mu = np.log(mu_g)
+        sigma = np.log(sigma_g)
 
-    mu_vol = mu + 3*sigma**2
-    mu_vol_g = np.exp(mu_vol)
+        mu_vol = mu + 3*sigma**2
+        mu_vol_g = np.exp(mu_vol)
 
-    x=np.linspace(0,upper_lim*2,1000)
+        x=np.linspace(0,upper_lim*2,1000)
 
-    novo = 3/(4*np.pi*np.exp(3*mu + 4.5*sigma**2))
-    
-    if upper_lim:
+        n0_per_v0_full = 3/(4*np.pi*np.exp(3*mu + 4.5*sigma**2))
+
         pdf = stats.lognorm.pdf(x, s=sigma, loc=0, scale=mu_g) # original distribution
         pdf_vol = stats.lognorm.pdf(x, s=sigma, loc=0, scale=mu_vol_g) # original distribution
 
         idx = np.logical_and(x<upper_lim, x>=lower_lim)
-        novo = novo*np.trapz(pdf[idx], x[idx])/np.trapz(pdf_vol[idx], x[idx])
-    
-    n_0 = novo*mass/particle_density*1e18 # per um3 to per m3
+        n0_per_v0 = n0_per_v0_full*np.trapz(pdf[idx], x[idx])/np.trapz(pdf_vol[idx], x[idx])
+        return n0_per_v0
+
+    n_0 = n0_per_v0(mode_radius, geo_std_dev, upper_lim, lower_lim)*mass/particle_density*1e18 # per um3 to per m3
     num_cm3 = air_density*n_0*1e-6
     
     return num_cm3
 
-def mass_to_number_trunc_lognormal_bimodal(mass, particle_density, mode_radius, geo_std_dev, mode_radius_2, geo_std_dev_2, air_density, upper_lim=None, lower_lim=0.1):
-    mu_g = mode_radius
-    sigma_g = geo_std_dev
+# def mass_to_number_trunc_lognormal_bimodal(mass, particle_density, mode_radius, geo_std_dev, mode_radius_2, geo_std_dev_2, air_density, upper_lim=None, lower_lim=0.1):
+#     mu_g = mode_radius
+#     sigma_g = geo_std_dev
 
-    mu = np.log(mu_g)
-    sigma = np.log(sigma_g)
+#     mu = np.log(mu_g)
+#     sigma = np.log(sigma_g)
 
-    mu_vol = mu + 3*sigma**2
-    mu_vol_g = np.exp(mu_vol)
+#     mu_vol = mu + 3*sigma**2
+#     mu_vol_g = np.exp(mu_vol)
 
-    x=np.linspace(0,upper_lim*2,1000)
+#     x=np.linspace(0,upper_lim*2,1000)
 
-    novo = 3/(4*np.pi*np.exp(3*mu + 4.5*sigma**2))
+#     novo = 3/(4*np.pi*np.exp(3*mu + 4.5*sigma**2))
     
-    if upper_lim:
-        pdf = stats.lognorm.pdf(x, s=sigma, loc=0, scale=mu_g) # original distribution
-        pdf_vol = stats.lognorm.pdf(x, s=sigma, loc=0, scale=mu_vol_g) # original distribution
+#     if upper_lim:
+#         pdf = stats.lognorm.pdf(x, s=sigma, loc=0, scale=mu_g) # original distribution
+#         pdf_vol = stats.lognorm.pdf(x, s=sigma, loc=0, scale=mu_vol_g) # original distribution
 
-        idx = np.logical_and(x<upper_lim, x>=lower_lim)
-        novo = novo*np.trapz(pdf[idx], x[idx])/np.trapz(pdf_vol[idx], x[idx])
+#         idx = np.logical_and(x<upper_lim, x>=lower_lim)
+#         novo = novo*np.trapz(pdf[idx], x[idx])/np.trapz(pdf_vol[idx], x[idx])
     
-    n_0 = novo*mass/particle_density*1e18 # per um3 to per m3
-    num_cm3 = air_density*n_0*1e-6
+#     n_0 = novo*mass/particle_density*1e18 # per um3 to per m3
+#     num_cm3 = air_density*n_0*1e-6
     
-    return num_cm3
+#     return num_cm3
 
 
 
-    
+
 def mass_to_number_trunc_power(mass, particle_density, upper_lim, lower_lim, air_density):
     
-    n_0 = 9*mass/particle_density*(lower_lim**-3 - upper_lim**-3)/(4*np.pi*np.log(upper_lim/lower_lim))*1e18 # per um3 to per m3
+    @lru_cache(maxsize=500)
+    def n0_per_v0(particle_density, lower_lim, upper_lim):
+        n_0_per_v0 = 9/particle_density*(lower_lim**-3 - upper_lim**-3)/(4*np.pi*np.log(upper_lim/lower_lim))*1e18 # per um3 to per m3
+        return n0_per_v0
     
-    
+    n_0 = mass*n0_per_v0(particle_density, lower_lim, upper_lim)
     num_cm3 = air_density*n_0*1e-6
     
     return num_cm3
@@ -308,3 +414,23 @@ def mass_to_number_trunc_power_dust_smallest(mass, particle_density, air_density
     return sum(numbers)
 
     
+    
+    
+@lru_cache(maxsize=500)
+def sum_trunc_lognormal(Dg, sigma, Dmax=None, Dmin=None):
+    """code from Matt Wyant, following Zender (https://patarnott.com/pdf/SizeDistributions.pdf)
+    """
+    sqrt2 = np.sqrt(2)
+    from scipy.special import erf
+    s = 0.
+    if Dmax is not None:
+        s += erf(np.log(Dmax/Dg)/(sqrt2*np.log(sigma)))       
+    else:
+        s += 1.
+        
+    if Dmin is not None:
+        s -= erf(np.log(Dmin/Dg)/(sqrt2*np.log(sigma)))
+    else:
+        s += 1.    
+    
+    return s/2
