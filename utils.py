@@ -27,7 +27,7 @@ import warnings
 import collections
 import pickle
 import sys
-import met_utils as mu
+from . import met_utils as mu
 
 from scipy.interpolate import interp1d
 # %% Parameters
