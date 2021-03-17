@@ -6,9 +6,10 @@ Created on Fri July  20 14:17:57 2018
 @author: jkcm
 """
 
-import utils
+from . import utils
 from . import met_utils
-from CSET_LES import utils as les_utils
+# from CSET_LES import utils as les_utils
+from . import les_utils
 import datetime as dt
 import numpy as np
 import os
@@ -308,40 +309,15 @@ def add_MERRA_to_trajectory(ds, box_degrees=2, location='nep'):
         else:
             merra_data.coords['lon'] = (merra_data['lon']+180)%360-180
             lons = (lons+180)%360-180
-        
-#         #adding in airdens variable # DEC UNNECESSARY
-#         rho = []
-#         var_shape = merra_data['AIRDENS'].isel(time=0, lat=0, lon=0).shape
-#         for (lat, lon, time) in zip(lats, lons, times):
-#                 if lat > np.max(merra_data.coords['lat']) or lat < np.min(merra_data.coords['lat']) or \
-#                     lon > np.max(merra_data.coords['lon']) or lon < np.min(merra_data.coords['lon']):
-#                     print(f'out of range of data" {lat}, {lon}, {time}')
-#                     print(merra_data.coords['lat'])
-#                     print(merra_data.coords['lon'])
-#                     raise ValueError()
-#                     vals.append(np.full(var_shape, float('nan'), dtype='float'))
-#                     continue
-#                 x = merra_data['AIRDENS'].sel(lon=slice(lon - box_degrees/2, lon + box_degrees/2),
-#                                         lat=slice(lat - box_degrees/2, lat + box_degrees/2))
-#                 z = x.sel(method='nearest', time=time, tolerance=np.timedelta64(2, 'h'))
-#                 #this applies a 2D gaussian the width of z, i.e. sigma=box_degrees
-#                 gauss_shape = tuple([v for v,i in zip(z.shape,z.dims) if i in ['lat', 'lon'] ])
-#                 gauss = gauss2D(shape=gauss_shape, sigma=gauss_shape[-1])
-#                 filtered = z * gauss
-#                 rho.append(filtered.sum(dim=('lat', 'lon')).values)
-#         ds['MERRA_AIRDENS'] = (tuple(x for x in merra_data['AIRDENS'].dims if x not in ['lat', 'lon']), 
-#                                np.array(rho), merra_data['AIRDENS'].attrs)
-    
-    
-
 
         merra_data = merra_data.sel(lat=slice(np.min(lats)-2, np.max(lats)+2), lon=slice(np.min(lons)-2, np.max(lons)+2))
 
+        
+        # calculating MERRA pressure levels and heights
         dz = merra_data.DELP/(9.81*merra_data.AIRDENS)
         assert(merra_data.DELP.dims[1]=='lev')
         assert(dz.dims[1]=='lev')
         assert(dz.lev[-1]==72)     
-        
         z = dz[:,::-1,:,:].cumsum(axis=1)[:,::-1,:,:]
         z.load()
         z[:, :-1, :, :] = (z.values[:, 1:, :, :]+z.values[:, :-1, :, :])/2
@@ -358,20 +334,9 @@ def add_MERRA_to_trajectory(ds, box_degrees=2, location='nep'):
         merra_data.PL.attrs = {'long_name': 'mid_level_pressure', 'units': 'Pa'}
 
         
-
-#         merra_data['ND_McCoy2017'] = 10**(0.41*np.log10(merra_data.SO4*10**9) + 2.11).compute()
-#         merra_data['ND_McCoy2018'] = 10**(0.08*np.log10(merra_data.SO4*10**9)-0.04*np.log10(merra_data.DU001*10**9) 
-#                                           +0.07*np.log10(merra_data.BCPHILIC*10**9)+0.03*np.log10(merra_data.OCPHILIC*10**9) 
-#                                           -0.02*np.log10(merra_data.SS001*10**9)+1.96)
-
-#         merra_data.ND_McCoy2017.attrs = {'long_name': 'Nd from sulfate-only regression', 'units': 'cm**-3'}
-#         merra_data.ND_McCoy2018.attrs = {'long_name': 'Nd from multi-species regression', 'units': 'cm**-3'}
-        
         vals_to_add = ['Na_tot', 'MERRA_Na_tot_corr', 'H', 'PL', 'RH', 'AIRDENS']
         na_tot = np.zeros_like(merra_data.SS001.values)
         
-
-
         new_vals = []
         for varname,params in les_utils.merra_species_dict_colarco.items():
             vals_to_add.append(varname)
@@ -385,20 +350,14 @@ def add_MERRA_to_trajectory(ds, box_degrees=2, location='nep'):
         merra_data['Na_tot'] = (('time', 'lev', 'lat', 'lon'), na_tot, {'long_name': 'total aerosol number concentration, >100 um', 'units': 'cm**-3'})
 
         merra_data['MERRA_Na_tot_corr'] = (('time', 'lev', 'lat', 'lon'), np.exp(1.24*np.log(na_tot) + 0.18), {'long_name': 'total aerosol number concentration, >100 um, corrected to aircraft', 'units': 'cm**-3'})  
-#         merra_data['MERRA_Na_tot_corr_FT'] = (('time', 'lev', 'lat', 'lon'), np.exp(0.81*np.log(na_tot) + 1.25), {'long_name': 'total aerosol number concentration, >100 um, corrected to aircraft (free-tropospheric obs only)', 'units': 'cm**-3'})  
-#         merra_data['MERRA_Na_tot_corr_BL'] = (('time', 'lev', 'lat', 'lon'), np.exp(1.82*np.log(na_tot) - 1.28), {'long_name': 'total aerosol number concentration, >100 um, corrected to aircraft (boundary layer obs only)', 'units': 'cm**-3'})  
-    merra_data['MERRA_Na_tot_corr_BL_logfit'] = (('time', 'lev', 'lat', 'lon'), np.exp(0.63*np.log(na_tot) + 2.42), {'long_name': 'total aerosol number concentration, >100 um, corrected to aircraft (boundary layer obs only)', 'units': 'cm**-3'})  
+        merra_data['MERRA_Na_tot_corr_BL_logfit'] = (('time', 'lev', 'lat', 'lon'), np.exp(0.63*np.log(na_tot) + 2.42), {'long_name': 'total aerosol number concentration, >100 um, corrected to aircraft (boundary layer obs only)', 'units': 'cm**-3'})  
                    
                    
         ds = ds.assign_coords(lev = les_utils.MERRA_lev(merra_data.lev))
         
-        merra_data = merra_data.assign_coords(lev = les_utils.MERRA_lev(merra_data.lev))
-        #merra_data = merra_data.rename_dims({'lev': 'pres'})
-                
+        merra_data = merra_data.assign_coords(lev = les_utils.MERRA_lev(merra_data.lev))                
         
         for var in vals_to_add+new_vals:
-            # print(var)
-            # print(merra_data[var].shape)
             var_shape = merra_data[var].isel(time=0, lat=0, lon=0).shape
             vals = []
             for (lat, lon, time) in zip(lats, lons, times):
@@ -408,7 +367,6 @@ def add_MERRA_to_trajectory(ds, box_degrees=2, location='nep'):
                     print(merra_data.coords['lat'])
                     print(merra_data.coords['lon'])
                     raise ValueError()
-                    #vals.append(np.full(var_shape, float('nan'), dtype='float'))
                     continue
                 try:
                     x = merra_data[var].sel(lon=slice(lon - box_degrees/2, lon + box_degrees/2),
@@ -426,20 +384,109 @@ def add_MERRA_to_trajectory(ds, box_degrees=2, location='nep'):
                 gauss = utils.gauss2D(shape=gauss_shape, sigma=gauss_shape[-1])
                 filtered = z * gauss
                 vals.append(filtered.sum(dim=('lat', 'lon')).values)
-             #print(tuple(x for x in merra_data[var].dims if x not in ['lat', 'lon']))
-             #print(ds.coords)
             if var in vals_to_add:
                 attrs = merra_data[var].attrs
             elif var in new_vals:
                 attrs = {'long_name': merra_data[var[:-3]].long_name + ', inferred aerosol number concentration', 'units':'cm**-3'}
             ds['MERRA_'+var] = (tuple(x for x in merra_data[var].dims if x not in ['lat', 'lon']), np.array(vals), attrs)
     
+    
+    
+    
+    ds['MERRA_Na_tot_mass'] = ds.MERRA_OCPHILIC + ds.MERRA_OCPHOBIC + ds.MERRA_BCPHILIC + \
+                              ds.MERRA_BCPHOBIC + ds.MERRA_SO4 + ds.MERRA_DU001 + ds.MERRA_DU002 +\
+                              ds.MERRA_DU003 +ds.MERRA_DU004 + ds.MERRA_DU005 + ds.MERRA_SS001 + \
+                              ds.MERRA_SS002 + ds.MERRA_SS003 + ds.MERRA_SS004 + ds.MERRA_SS005
+   
+    # #akn=aitken = everything below 80nm
+    # #acc = accumulution = everything between 80 and 1000
+    # #crs=coarse = everything above 1000
+    mass_acc_dict = {}
+    mass_akn_dict = {}
+    mass_crs_dict = {}
+    num_acc_dict = {}
+    num_akn_dict = {}
+    num_crs_dict = {}
+    
+    
+    
+    for x in ['MERRA_OCPHILIC', 'MERRA_OCPHOBIC', 'MERRA_BCPHILIC', 'MERRA_BCPHOBIC', 'MERRA_SO4']:
+        params = les_utils.merra_species_dict_colarco[x.split('_')[1]]
+        data = ds[x]
+
+        rho = ds.MERRA_AIRDENS.values 
+        n0 = les_utils.get_n0(mass=data.values, density=params['density'], r_max=50, r_min=0.001, 
+                              std_dev=params['geometric_std_dev'], mode_radius=params['mode_radius'])
+        mass_acc_dict[x] = les_utils.get_m_subset(density=params['density'], n0=n0, r_min=0.08, r_max=1, 
+                                                  std_dev=params['geometric_std_dev'], mode_radius=params['mode_radius'])
+        mass_akn_dict[x] = les_utils.get_m_subset(density=params['density'], n0=n0, r_min=0.01, r_max=0.08, 
+                                                  std_dev=params['geometric_std_dev'], mode_radius=params['mode_radius'])
+        mass_crs_dict[x] = les_utils.get_m_subset(density=params['density'], n0=n0, r_min=1, r_max=params['upper'], 
+                                                  std_dev=params['geometric_std_dev'], mode_radius=params['mode_radius'])
+        num_acc_dict[x] = les_utils.get_n_subset(n0, r_min=0.08, r_max=1, 
+                                                 std_dev=params['geometric_std_dev'], mode_radius=params['mode_radius'])
+        num_akn_dict[x] = les_utils.get_n_subset(n0, r_min=0.01, r_max=0.08, 
+                                                 std_dev=params['geometric_std_dev'], mode_radius=params['mode_radius'])
+        num_crs_dict[x] = les_utils.get_n_subset(n0, r_min=1, r_max=params['upper'], 
+                                                 std_dev=params['geometric_std_dev'], mode_radius=params['mode_radius'])
+    
+        ds[x+'_n0'] = (('time', 'lev'), n0*rho)
+
+
+    mass_acc_attrs = {'long_name': 'accumulation mode aerosol mass',
+                        'units': 'kg kg**-1'}
+    mass_akn_attrs = {'long_name': 'aikten mode aerosol mass',
+                        'units': 'kg kg**-1'}
+    mass_crs_attrs = {'long_name': 'coarse mode aerosol mass',
+                        'units': 'kg kg**-1'}
+
+    ds['MERRA_acc_mass'] = (('time', 'lev'), np.sum(list(mass_acc_dict.values()), axis=0) + \
+                                ds.MERRA_DU001.values + ds.MERRA_SS002.values + ds.MERRA_SS003.values,
+                                mass_acc_attrs)
+    ds['MERRA_akn_mass'] = (('time', 'lev'), np.sum(list(mass_akn_dict.values()), axis=0) + \
+                                ds.MERRA_SS001.values,
+                                mass_akn_attrs)
+    ds['MERRA_crs_mass'] = (('time', 'lev'), np.sum(list(mass_crs_dict.values()), axis=0) + \
+                                ds.MERRA_DU002.values + ds.MERRA_DU003.values + ds.MERRA_DU004.values + ds.MERRA_DU005.values + \
+                                ds.MERRA_SS004.values + ds.MERRA_SS005.values,
+                                mass_crs_attrs)
+    
+    num_acc_attrs = {'long_name': 'accumulation mode aerosol number',
+                        'units': 'kg kg**-1'}
+    num_akn_attrs = {'long_name': 'aikten mode aerosol number',
+                        'units': 'kg kg**-1'}
+    num_crs_attrs = {'long_name': 'coarse mode aerosol number',
+                        'units': 'kg kg**-1'}
+    
+    ds['MERRA_acc_num'] = (('time', 'lev'), np.sum(list(num_acc_dict.values()), axis=0) + \
+                                ds.MERRA_DU001_Na.values + ds.MERRA_SS002_Na.values + ds.MERRA_SS003_Na.values,
+                                mass_acc_attrs)
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     ds.lev.attrs['long_name'] = 'model level pressure'
     ds.lev.attrs['units'] = 'millibars'
     
     ds.attrs['MERRA_params'] = f'MERRA-2 data primarily downloaded from NASA GMAO, and statistics computed over a {box_degrees}-deg average centered on trajectory. For aerosol estimates (Na), equivalent aerosol number is computed based on aerosol mass consistent with the MERRA2-assumed aerosol optical properties. Contact jkcm@uw.edu for details.'
     ds.attrs['MERRA_reference'] = 'MERRA-2 data available at https://gmao.gsfc.nasa.gov/reanalysis/MERRA-2.'
-#     Nd estimates from McCoy et al. (2017) and McCoy et al. (2018): McCoy, D. T., Bender, F. A. ‐M., Mohrmann, J. K. C., Hartmann, D. L., Wood, R., & Grosvenor, D. P. (2017). The global aerosol‐cloud first indirect effect estimated using MODIS, MERRA, and AeroCom. Journal of Geophysical Research: Atmospheres, 122(3), 1779–1796. https://doi.org/10.1002/2016JD026141. McCoy, D. T., Bender, F. A. M., Grosvenor, D. P., Mohrmann, J., Hartmann, D. L., Wood, R., & Field, P. R. (2018). Predicting decadal trends in cloud droplet number concentration using reanalysis and satellite data. Atmospheric Chemistry and Physics, 18(3), 2035–2047. https://doi.org/10.5194/acp-18-2035-2018'
     
     return ds
 
