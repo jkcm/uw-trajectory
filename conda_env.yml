@@ -13,12 +13,10 @@ dependencies:
   - conda-forge::proj4=5.2.0
   - basemap
   - h5netcdf=0.7.4 
-#  - geographiclib
 
   - pip:
-#    - pandarallel
     - sklearn
     - cdsapi
-prefix: /home/disk/p/jkcm/anaconda3/envs/trace
+prefix: /home/disk/p/jkcm/anaconda3/envs/uwtrajectory
 
 

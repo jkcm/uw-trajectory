@@ -5,7 +5,9 @@ Created on Wed Apr  6 16:42:46 2016
 @author: jkcm
 """
 import numpy as np
-import warnings
+np.warnings.filterwarnings('ignore')
+
+# import warnings
 from scipy import integrate
 # warnings.simplefilter("ignore")
 p0 = 1000.  # reference pressure, hPa
@@ -15,6 +17,8 @@ eps = Rvap/Rdry - 1
 cp = 1004.  # cp_dry, specific heat of dry air at const pressure, J/K/kg
 g = 9.81   # grav acceleration at sea level, m/s2
 lv = 2.5*10**6  # latent heat of vaporization at 0C, J/kg
+
+
 
 
 
@@ -123,10 +127,11 @@ def thetae_from_t_tdew_mr_p(t, tdew, mr, p):
     return theta_e
 
 def get_LCL(t, t_dew, z):
-    if np.any(t_dew > t):
-                t_dew = np.minimum(t, t_dew)
-#         raise ValueError('dew point temp above temp, that\'s bananas')
-    return z + 125*(t - t_dew)
+    raise NotImplementedError('use calculate_LCL instead')
+#     if np.any(t_dew > t):
+#                 t_dew = np.minimum(t, t_dew)
+# #         raise ValueError('dew point temp above temp, that\'s bananas')
+#     return z + 125*(t - t_dew)
 
 def get_virtual_dry_static_energy(T, q, z):
     return cp*T*(1+eps*q) + g*z
@@ -277,6 +282,52 @@ def RH_50_pblht_1d(z, RH):
     pass
 
 
+def Peter_inv(z, rh, theta, polyfit_range=1):
+    
+    idx = z<5000
+    
+    THETA = theta[idx]
+    RH = rh[idx]
+    z = z[idx]
+    
+    dz = np.diff(z)#, prepend=(2*z[0]-z[1]))
+    d_THETA = np.diff(THETA)
+    d_RH = np.diff(RH)
+#     d_THETA = THETA[:-1] - THETA[1:]
+#     d_RH = RH[:-1] - RH[1:]
+#     z  = zz[i,:]  if len(zz.shape) > 1 else zz
+#     dz = dzz[i,:] if len(zz.shape) > 1 else dzz
+    dTHETA_dz = d_THETA / dz
+    dRH_dz = d_RH / dz
+    dTHETA_dz[dTHETA_dz < 0] = 0
+    dRH_dz[dRH_dz > 0] = 0    
+    func = dTHETA_dz * dRH_dz
+    indx = np.argmin(func)                
+    # approximate func as a parabola around the minimum and find the height where that parabola is minimized. 
+    # This will allow the inversion height to vary continuously as the input profiles change.
+    # inversion_test is defined at midpoints of grid
+    zavg = 0.5 * (z[:-1] + z[1:])
+    rnge = range(indx-polyfit_range, min(indx+1+polyfit_range, len(func))) # edited to add min() to avoid overrun
+    # we define the parabola, converting from m to km.
+    try:
+        pp = np.polyfit(1e-3 * zavg[rnge], func[rnge], 2)
+        # take the derivative of the parabola in coeffient space.
+        pp_prime = np.array([2 * pp[0], pp[1]]) # this is its derivative
+        # find the zero-crossing of the derivative. This is the inversion height in meters
+        z_inv = -1e3 * pp_prime[1] / pp_prime[0]         
+    except np.linalg.LinAlgError as e:
+        print(z[indx])
+        print(zavg[rnge])
+        print(func[rnge])
+        print(dTHETA_dz[rnge])
+        print(dRH_dz[rnge])
+        print(z[rnge])
+        print(rh[rnge])
+        print(theta[rnge])
+
+        return z[indx]
+    return z_inv
+
 def Peter2_inv(z, rh, theta):
     
     idx = z<3000
@@ -331,7 +382,7 @@ def quick_inversion(z, t, p, smooth_t=False): # z in meters, t in K, p in hPa
         gamma = -np.gradient(t, z)*1000
     gamma[np.gradient(z)>-1] = np.nan
     gamma[z<330] = np.nan
-    gamma[z>3000] = np.nan    
+#     gamma[z>3000] = np.nan    
     gamma[np.abs(gamma)>100] = np.nan
     gamma_diff = (gamma-gamma_moist)/1000
 
@@ -340,7 +391,10 @@ def quick_inversion(z, t, p, smooth_t=False): # z in meters, t in K, p in hPa
                    "t_above_inv": np.nan, "t_below_inv": np.nan, "d_t_inv": np.nan}
     
     #inversion center
-    i_mid = np.nanargmin(gamma)  # middle of inversion is where the lapse rate is the strongest
+    #quick hack to only look below 3km, but allow the inversion top to be above 3km:
+    gamma_lower = gamma.copy()
+    gamma_lower[z>3000] = np.nan
+    i_mid = np.nanargmin(gamma_lower)  # middle of inversion is where the lapse rate is the strongest    
     if np.isnan(i_mid):
         print('no i_mid')
         return buncha_nans

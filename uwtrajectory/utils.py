@@ -31,27 +31,7 @@ from . import met_utils as mu
 
 from scipy.interpolate import interp1d
 # %% Parameters
-project_dir = r'/home/disk/eos4/jkcm/Data/CSET/Lagrangian_project'
-trajectory_dir = os.path.join(project_dir, 'Trajectories')
-trajectory_netcdf_dir = r'/home/disk/eos4/jkcm/Data/CSET/Lagrangian_project/trajectory_files/'
-GOES_source = '/home/disk/eos4/jkcm/Data/CSET/GOES/VISST_pixel'
-GOES_trajectories = '/home/disk/eos4/jkcm/Data/CSET/GOES/flight_trajectories/data'
-GOES_flights = '/home/disk/eos4/jkcm/Data/CSET/GOES/flightpath/GOES_netcdf'
-dropsonde_dir = '/home/disk/eos4/jkcm/Data/CSET/AVAPS/NETCDF'
-latlon_range = {'lat': (15, 50), 'lon': (-160, -110)}
-HYSPLIT_workdir = '/home/disk/eos4/jkcm/Data/HYSPLIT/working'  # storing CONTROL
-HYSPLIT_call = '/home/disk/p/jkcm/hysplit/trunk/exec/hyts_std'  # to run HYSPLIT
-HYSPLIT_source = '/home/disk/eos4/jkcm/Data/HYSPLIT/source'
-ERA_source = r'/home/disk/eos4/jkcm/Data/CSET/ERA5'
-ERA_ens_source = r'/home/disk/eos4/jkcm/Data/CSET/ERA5/ensemble'
-ERA_ens_temp_source = r'/home/disk/eos4/jkcm/Data/CSET/ERA5/ens_temp'
-# MERRA_source = r'/home/disk/eos4/jkcm/Data/CSET/MERRA'
-MERRA_source = r'/home/disk/eos4/jkcm/Data/MERRA/3h'
-base_date = dt.datetime(2015, 7, 1, 0, 0, 0, tzinfo=pytz.UTC)
-CSET_flight_dir = r'/home/disk/eos4/jkcm/Data/CSET/flight_data'
-sausage_dir = '/home/disk/eos4/jkcm/Data/CSET/sausage'
-plot_dir = r'/home/disk/p/jkcm/plots/lagrangian_paper_figures'
-flight_trajs = '/home/disk/eos4/jkcm/Data/CSET/Trajectories'
+
 
 SMALL_SIZE = 16
 MEDIUM_SIZE = 20
@@ -134,6 +114,24 @@ def get_lon_prime(lat, lon, lon0=-140, lat0=30):
         lonp = lon0 + 0.8*(lon-lon0) + 0.4*(lat-lat0)
         return lonp
 
+def nan_helper(y):
+    """Helper to handle indices and logical indices of NaNs.
+
+    Input:
+        - y, 1d numpy array with possible NaNs
+    Output:
+        - nans, logical indices of NaNs
+        - index, a function, with signature indices= index(logical_indices),
+          to convert logical indices of NaNs to 'equivalent' indices
+    Example:
+        >>> # linear interpolation of NaNs
+        >>> nans, x= nan_helper(y)
+        >>> y[nans]= np.interp(x(nans), x(~nans), y[~nans])
+    """
+
+    return np.isnan(y), lambda z: z.nonzero()[0]
+    
+    
 def gauss2D(shape=(3,3),sigma=0.5):
     """
     2D gaussian mask - should give the same result as MATLAB's

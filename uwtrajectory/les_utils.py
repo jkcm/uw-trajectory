@@ -265,7 +265,8 @@ def get_m_subset(density, n0, r_min, r_max, std_dev, mode_radius):
 def mass_to_number(mass, air_density, shape_params):
     if shape_params['dist'] == 'trunc_lognormal':
         return mass_to_number_trunc_lognormal(mass=mass, particle_density=shape_params['density'], mode_radius=shape_params['mode_radius'], 
-                                               geo_std_dev=shape_params['geometric_std_dev'], air_density=air_density, upper_lim=shape_params['upper'])
+                                               geo_std_dev=shape_params['geometric_std_dev'], air_density=air_density, 
+                                              upper_lim=shape_params['upper'])
     elif shape_params['dist'] == 'lognormal':
         return mass_to_number_lognormal(mass=mass, particle_density=shape_params['density'], mode_radius=shape_params['mode_radius'], 
                                                geo_std_dev=shape_params['geometric_std_dev'], air_density=air_density)
@@ -330,7 +331,7 @@ def mass_to_number_trunc_MG(mass, particle_density, air_density, upper_lim, lowe
 
 
 
-def mass_to_number_trunc_lognormal(mass, particle_density, mode_radius, geo_std_dev, air_density, upper_lim, lower_lim):
+def mass_to_number_trunc_lognormal(mass, particle_density, mode_radius, geo_std_dev, air_density, upper_lim, lower_lim=0.1):
     #get the mass to number the old way, by integrating.
     @lru_cache(maxsize=500)
     def n0_per_v0(mode_radius, geo_std_dev, upper_lim, lower_lim):
@@ -392,12 +393,12 @@ def mass_to_number_trunc_power(mass, particle_density, upper_lim, lower_lim, air
     
     @lru_cache(maxsize=500)
     def n0_per_v0(particle_density, lower_lim, upper_lim):
-        n_0_per_v0 = 9/particle_density*(lower_lim**-3 - upper_lim**-3)/(4*np.pi*np.log(upper_lim/lower_lim))*1e18 # per um3 to per m3
-        return n0_per_v0
+        novo = 9/particle_density*(lower_lim**-3 - upper_lim**-3)/(4*np.pi*np.log(upper_lim/lower_lim))*1e18 # per um3 to per m3
+        return novo
     
-    n_0 = mass*n0_per_v0(particle_density, lower_lim, upper_lim)
+    novo = n0_per_v0(particle_density, lower_lim, upper_lim)
+    n_0 = mass*novo
     num_cm3 = air_density*n_0*1e-6
-    
     return num_cm3
 
 
