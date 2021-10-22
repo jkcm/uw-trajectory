@@ -36,6 +36,7 @@ from . import config
 from . import met_utils
 from . import les_utils
 
+all_datasets = ['ERA', 'ERA_sfc', 'ERA_ens', 'MODIS_pbl', 'MERRA', 'SSMI', 'CERES', 'AMSR_Tb', 'AMSR']
 
 def rounder(values):
     def f(x):
@@ -136,6 +137,8 @@ def add_speeds_to_trajectories(ds):
     ds['traj_hdg'] = (('time'), headings, {'long_name': 'Trajectory heading', 'units': 'deg'})
     ds['traj_spd'] = (('time'), speeds, {'long_name': 'Trajectory speed', 'units': "m s**-1"})
     return ds   
+
+
 
 def make_trajectory(ds, skip=[], save=False):
     ds = add_speeds_to_trajectories(ds)

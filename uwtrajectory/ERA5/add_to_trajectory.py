@@ -3,6 +3,7 @@ import xarray as xr
 import os
 
 from .. import utils, met_utils, config
+from ..LoopTimer import LoopTimer
 
 def add_ERA_ens_to_trajectory(ds, box_degrees=2):
     
@@ -89,7 +90,9 @@ def add_ERA_to_trajectory(ds, box_degrees=2):
              for i in unique_days]
 #     flux_files = [os.path.join(utils.ERA_source, "ERA5.flux.NEP.{:%Y-%m-%d}.nc".format(i))
 #          for i in unique_days]
-    with xr.open_mfdataset(sorted(files), combine='by_coords') as data:
+    with xr.open_mfdataset(sorted(files), combine='by_coords') as full_dataset:
+        data = full_dataset.sel(latitude=slice(np.max(lats)+box_degrees, np.min(lats)-box_degrees), longitude=slice(np.min(lons)-box_degrees, np.max(lons)+box_degrees))
+        print('prepping data...')
         ds.coords['level'] = data.coords['level']
         
         #adding in q:
@@ -109,6 +112,7 @@ def add_ERA_to_trajectory(ds, box_degrees=2):
         
         # adding gradients in for z, t, and q. Assuming constant grid spacing.
         for var in ['t', 'q', 'z', 'u', 'v', 'MR']:
+            print(f'creating gradient in {var}...', end="\r")
             [_,_,dvardj, dvardi] = np.gradient(data[var].values)
             dlatdy = 360/4.000786e7  # degrees lat per meter y
             def get_dlondx(lat) : return(360/(np.cos(np.deg2rad(lat))*4.0075017e7))
@@ -154,10 +158,13 @@ def add_ERA_to_trajectory(ds, box_degrees=2):
                 var = 'd{}d{}'.format(key, n)
                 attrs['long_name'] = attrs['long_name'].format(drn)
                 data[var] = data[var].assign_attrs(attrs)
-            
+        print('\ndone')
         for var in data.data_vars.keys():
             vals = []
-            for (lat, lon, time) in zip(lats, lons, times):
+            print(f'working on {var}...')
+            lt = LoopTimer(len(lats))
+            for i, (lat, lon, time) in enumerate(zip(lats, lons, times)):
+                lt.update()
                 if lat > np.max(data.coords['latitude']) or lat < np.min(data.coords['latitude']) or \
                     lon > np.max(data.coords['longitude']) or lon < np.min(data.coords['longitude']):
                     print(f'out of range of data" {lat}, {lon}, {time}')
@@ -172,6 +179,7 @@ def add_ERA_to_trajectory(ds, box_degrees=2):
                 gauss = utils.gauss2D(shape=z.shape[1:], sigma=z.shape[0])
                 filtered = z.values * gauss
                 vals.append(np.sum(filtered, axis=(1,2)))
+            print('')
             ds['ERA_'+var] = (('time', 'level'), np.array(vals))
             ds['ERA_'+var] = ds['ERA_'+var].assign_attrs(data[var].attrs)
              
